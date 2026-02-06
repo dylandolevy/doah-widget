@@ -127,139 +127,109 @@
         }
       }
 
-      // mount the widget
-      // REPLACEMENT: robust mount + reload logic for ChatKit
-function getChatKitConstructor() {
-  // Try common shapes in order
-  if (typeof window.ChatKit === "function") return window.ChatKit;
-  if (window.ChatKit && typeof window.ChatKit.default === "function") return window.ChatKit.default;
-  if (window.ChatKit && typeof window.ChatKit.ChatKit === "function") return window.ChatKit.ChatKit;
-  // Some bundles expose a factory or mount function instead of a constructor
-  if (window.ChatKit && typeof window.ChatKit.mount === "function") return window.ChatKit.mount;
-  return null;
-}
-
-async function mountChat() {
-  const chatEl = document.getElementById("my-chat");
-  if (!chatEl) {
-    console.error("mountChat: #my-chat not found");
-    return;
-  }
-
-  // If already mounted, no-op (or try to re-use)
-  if (chatEl.chatkit && chatEl.chatkit.setOptions) {
-    console.log("mountChat: widget already mounted — updating options");
-    try {
-      await chatEl.chatkit.setOptions({
-        api: { async getClientSecret(current) { return await getClientSecret(current); } }
-      });
-    } catch (e) { console.error("mountChat update failed:", e); }
-    return;
-  }
-
-  // Wait until ChatKit library loads (timeout after ~6s)
-  const start = Date.now();
-  while (!window.ChatKit && Date.now() - start < 6000) {
-    // small sleep
-    await new Promise(r => setTimeout(r, 100));
-  }
-
-  const CtorOrMount = getChatKitConstructor();
-  if (!CtorOrMount) {
-    console.error("mountChat: no ChatKit constructor found. window.ChatKit =", window.ChatKit);
-    // show shape in debug area (if available)
-    try { document.getElementById("debug").textContent = JSON.stringify(window.ChatKit, Object.getOwnPropertyNames(window.ChatKit||{}), 2); } catch(e) {}
-    return;
-  }
-
-  try {
-    let instance;
-    // If it's a mount function (not a constructor), call it
-    if (CtorOrMount === window.ChatKit.mount) {
-      // some builds may expose mount(el, options)
-      instance = await CtorOrMount(chatEl, {
-        api: { async getClientSecret(current) { return await getClientSecret(current); } }
-      });
-    } else {
-      // treat as a constructor
-      instance = new CtorOrMount(chatEl);
-      // set options (the widget API uses setOptions)
-      if (instance && typeof instance.setOptions === "function") {
-        await instance.setOptions({
-          api: { async getClientSecret(current) { return await getClientSecret(current); } }
-        });
-      } else if (typeof instance === "object" && instance !== null) {
-        console.warn("mountChat: created ChatKit instance but no setOptions found. instance:", instance);
+      // Robust mounting logic: try multiple export shapes and wait for the library
+      function getChatKitConstructor() {
+        // Try common shapes in order
+        if (typeof window.ChatKit === "function") return window.ChatKit;
+        if (window.ChatKit && typeof window.ChatKit.default === "function") return window.ChatKit.default;
+        if (window.ChatKit && typeof window.ChatKit.ChatKit === "function") return window.ChatKit.ChatKit;
+        // Some bundles expose a factory or mount function instead of a constructor
+        if (window.ChatKit && typeof window.ChatKit.mount === "function") return window.ChatKit.mount;
+        return null;
       }
-    }
 
-    // attach to DOM node for future reference
-    chatEl.chatkit = instance || { mountedWithMountFn: true };
-    console.log("mountChat: ChatKit mounted", chatEl.chatkit);
-  } catch (err) {
-    console.error("mountChat: failed to instantiate ChatKit:", err);
-  }
-}
+      async function mountChat() {
+        const chatEl = document.getElementById("my-chat");
+        if (!chatEl) {
+          console.error("mountChat: #my-chat not found");
+          return;
+        }
 
-// Reload button handler: unmount if available then remount
-document.getElementById("reload-widget").addEventListener("click", async () => {
-  const chatEl = document.getElementById("my-chat");
-  if (chatEl && chatEl.chatkit) {
-    try {
-      if (typeof chatEl.chatkit.unmount === "function") {
-        chatEl.chatkit.unmount();
-      } else {
-        chatEl.innerHTML = "";
-      }
-    } catch (e) {
-      console.warn("reload: unmount failed:", e);
-      chatEl.innerHTML = "";
-    }
-    chatEl.chatkit = null;
-  } else if (chatEl) {
-    // clear container in case previous script wrote DOM
-    chatEl.innerHTML = "";
-  }
-  // clear cached secret so mount requests a fresh one (optional)
-  cachedSecret = null;
-  cachedExpiresAt = 0;
-  // wait a tick to ensure DOM cleared
-  await new Promise(r => setTimeout(r, 100));
-  mountChat();
-});
+        // If already mounted, update options
+        if (chatEl.chatkit && chatEl.chatkit.setOptions) {
+          console.log("mountChat: widget already mounted — updating options");
+          try {
+            await chatEl.chatkit.setOptions({
+              api: { async getClientSecret(current) { return await getClientSecret(current); } }
+            });
+          } catch (e) { console.error("mountChat update failed:", e); }
+          return;
+        }
 
+        // Wait until ChatKit library loads (timeout after ~6s)
+        const start = Date.now();
+        while (!window.ChatKit && Date.now() - start < 6000) {
+          // small sleep
+          await new Promise(r => setTimeout(r, 100));
+        }
 
-        chatkit.setOptions({
-          api: {
-            async getClientSecret(currentClientSecret) {
-              return await getClientSecret(currentClientSecret);
+        const CtorOrMount = getChatKitConstructor();
+        if (!CtorOrMount) {
+          console.error("mountChat: no ChatKit constructor found. window.ChatKit =", window.ChatKit);
+          try { document.getElementById("debug").textContent = JSON.stringify(window.ChatKit, Object.getOwnPropertyNames(window.ChatKit||{}), 2); } catch(e) {}
+          return;
+        }
+
+        try {
+          let instance;
+          // If it's a mount function (not a constructor), call it
+          if (CtorOrMount === window.ChatKit.mount) {
+            // some builds may expose mount(el, options)
+            instance = await CtorOrMount(chatEl, {
+              api: { async getClientSecret(current) { return await getClientSecret(current); } }
+            });
+          } else {
+            // treat as a constructor
+            instance = new CtorOrMount(chatEl);
+            // set options (the widget API uses setOptions)
+            if (instance && typeof instance.setOptions === "function") {
+              await instance.setOptions({
+                api: { async getClientSecret(current) { return await getClientSecret(current); } }
+              });
+            } else if (typeof instance === "object" && instance !== null) {
+              console.warn("mountChat: created ChatKit instance but no setOptions found. instance:", instance);
             }
-          },
-          // Optional visual / behavior options can be set here; leaving defaults
-        });
+          }
+
+          // attach to DOM node for future reference
+          chatEl.chatkit = instance || { mountedWithMountFn: true };
+          console.log("mountChat: ChatKit mounted", chatEl.chatkit);
+        } catch (err) {
+          console.error("mountChat: failed to instantiate ChatKit:", err);
+        }
       }
+
+      // Reload button handler: unmount if available then remount
+      document.getElementById("reload-widget").addEventListener("click", async () => {
+        const chatEl = document.getElementById("my-chat");
+        if (chatEl && chatEl.chatkit) {
+          try {
+            if (typeof chatEl.chatkit.unmount === "function") {
+              chatEl.chatkit.unmount();
+            } else {
+              chatEl.innerHTML = "";
+            }
+          } catch (e) {
+            console.warn("reload: unmount failed:", e);
+            chatEl.innerHTML = "";
+          }
+          chatEl.chatkit = null;
+        } else if (chatEl) {
+          // clear container in case previous script wrote DOM
+          chatEl.innerHTML = "";
+        }
+        // clear cached secret so mount requests a fresh one (optional)
+        cachedSecret = null;
+        cachedExpiresAt = 0;
+        // wait a tick to ensure DOM cleared
+        await new Promise(r => setTimeout(r, 100));
+        mountChat();
+      });
 
       // init when script is ready
       document.addEventListener("DOMContentLoaded", () => {
-        // Wait for ChatKit client lib to load. It defines window.ChatKit when ready.
-        const waitForClient = setInterval(() => {
-          if (window.ChatKit) {
-            clearInterval(waitForClient);
-            mountChat();
-          }
-        }, 100);
-
-        document.getElementById("reload-widget").addEventListener("click", () => {
-          // destroy and remount (useful during dev)
-          const chatEl = document.getElementById("my-chat");
-          if (chatEl.chatkit && chatEl.chatkit.unmount) {
-            try { chatEl.chatkit.unmount(); } catch (e) { /* ignore */ }
-            chatEl.innerHTML = "";
-            chatEl.chatkit = null;
-          }
-          cachedSecret = null; cachedExpiresAt = 0;
-          mountChat();
-        });
+        // start mount attempt immediately; mountChat waits for the library internally
+        mountChat();
       });
     })();
   </script>
