@@ -1,3 +1,6 @@
+export const config = {
+  runtime: "nodejs"
+};
 // api/chatkit/session.js
 export default async function handler(req, res) {
   // Allow only your GitHub Pages origin in production:
