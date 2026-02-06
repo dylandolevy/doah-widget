@@ -1,1 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ChatKit demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- ChatKit client library (async) -->
+  <script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" async></script>
 
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 24px; color: #111; }
+    .container { max-width: 960px; margin: 0 auto; display: flex; gap: 24px; align-items: flex-start; }
+    .info { flex: 1 1 420px; }
+    #my-chat { width: 360px; height: 640px; border: 1px solid #e6e6e6; border-radius: 10px; overflow: hidden; }
+    button { background:#0066ff; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    .note { font-size:13px; color:#666; margin-top:10px; }
+    pre { background:#f7f7f9; padding:10px; border-radius:8px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <h1>ChatKit on GitHub Pages</h1>
+  <div class="container">
+    <div class="info">
+      <p>Chat widget (right). The page will ask your Vercel endpoint for a session secret and refresh it automatically before expiry.</p>
+      <p>
+        <button id="reload-widget">Reload widget</button>
+      </p>
+      <div class="note">If you see errors, open DevTools → Console and Network to inspect the POST to your Vercel endpoints.</div>
+      <h3>Debug (last server response)</h3>
+      <pre id="debug">—</pre>
+    </div>
+
+    <!-- Chat widget container -->
+    <div id="my-chat" role="region" aria-label="Chat widget"></div>
+  </div>
+
+  <script>
+    (() => {
+      // Replace with your deployed Vercel base URL (no trailing slash)
+      const VERCEL_BASE = "https://doah-widget.vercel.app";
+
+      // in-memory cache for current client secret and expiry
+      let cachedSecret = null;
+      let cachedExpiresAt = 0; // unix seconds
+
+      // small helper to show debug
+      function debugLog(obj) {
+        try {
+          document.getElementById("debug").textContent = JSON.stringify(obj, null, 2);
+        } catch (e) {
+          // ignore
+        }
+        console.debug("ChatKit debug:", obj);
+      }
+
+      // get new session from /api/chatkit/session
+      async function requestNewSession(userId = null) {
+        const body = userId ? { user: userId } : {};
+        const res = await fetch(`${VERCEL_BASE}/api/chatkit/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          throw new Error("session creation failed: " + (j?.error?.message || JSON.stringify(j)));
+        }
+        // j contains client_secret and expires_at (Unix seconds) per the ChatKit response
+        cachedSecret = j.client_secret;
+        if (j.expires_at) cachedExpiresAt = Number(j.expires_at);
+        debugLog({ action: "new_session", payload: j });
+        return cachedSecret;
+      }
+
+      // refresh an existing session via /api/chatkit/refresh
+      async function refreshSession(currentSecret) {
+        const res = await fetch(`${VERCEL_BASE}/api/chatkit/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_secret: currentSecret })
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          throw new Error("refresh failed: " + (j?.error?.message || JSON.stringify(j)));
+        }
+        cachedSecret = j.client_secret;
+        if (j.expires_at) cachedExpiresAt = Number(j.expires_at);
+        debugLog({ action: "refresh", payload: j });
+        return cachedSecret;
+      }
+
+      // getClientSecret used by ChatKit client — receives currentClientSecret param
+      // Logic:
+      //  - if we have no cachedSecret or currentClientSecret is falsy => request new session
+      //  - if secret exists and is within 30s of expiry => call refresh endpoint
+      //  - otherwise return cachedSecret
+      async function getClientSecret(currentClientSecret) {
+        try {
+          // if no server-side secret yet, create one
+          if (!currentClientSecret && !cachedSecret) {
+            // optionally pass a real user id if you have auth
+            return await requestNewSession("guest-" + Date.now());
+          }
+
+          // if widget gave us a currentClientSecret but we haven't cached it yet, cache it
+          if (currentClientSecret && !cachedSecret) {
+            cachedSecret = currentClientSecret;
+            // we don't know expiry in this branch; best-effort: request server for full session info
+            // rather than blind refresh, ask the server to create a new session so we get expiry metadata
+            return await requestNewSession();
+          }
+
+          // if cached expiry is near, refresh
+          const nowSec = Math.floor(Date.now() / 1000);
+          const secondsLeft = cachedExpiresAt - nowSec;
+          if (cachedExpiresAt && secondsLeft <= 30) {
+            // refresh using current secret
+            return await refreshSession(cachedSecret);
+          }
+
+          // otherwise just return the cached secret
+          return cachedSecret;
+        } catch (err) {
+          console.error("getClientSecret error:", err);
+          debugLog({ action: "error", message: String(err) });
+          throw err;
+        }
+      }
+
+      // mount the widget
+      function mountChat() {
+        const chatEl = document.getElementById("my-chat");
+        const chatkit = chatEl.chatkit || (chatEl.chatkit = new window.ChatKit(chatEl));
+
+        chatkit.setOptions({
+          api: {
+            async getClientSecret(currentClientSecret) {
+              return await getClientSecret(currentClientSecret);
+            }
+          },
+          // Optional visual / behavior options can be set here; leaving defaults
+        });
+      }
+
+      // init when script is ready
+      document.addEventListener("DOMContentLoaded", () => {
+        // Wait for ChatKit client lib to load. It defines window.ChatKit when ready.
+        const waitForClient = setInterval(() => {
+          if (window.ChatKit) {
+            clearInterval(waitForClient);
+            mountChat();
+          }
+        }, 100);
+
+        document.getElementById("reload-widget").addEventListener("click", () => {
+          // destroy and remount (useful during dev)
+          const chatEl = document.getElementById("my-chat");
+          if (chatEl.chatkit && chatEl.chatkit.unmount) {
+            try { chatEl.chatkit.unmount(); } catch (e) { /* ignore */ }
+            chatEl.innerHTML = "";
+            chatEl.chatkit = null;
+          }
+          cachedSecret = null; cachedExpiresAt = 0;
+          mountChat();
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
