@@ -3,8 +3,9 @@ export default async function handler(req, res) {
   // Allow only your GitHub Pages origin in production:
   const ALLOWED_ORIGINS = [
     "https://dylandolevy.github.io/doah-widget/", // <- replace with your GitHub Pages domain
-    "doah-widget-mq212h4r6-dylans-projects-54783701.vercel.app", // optional for preview
-    "doah-widget.vercel.app"
+    "doah-widget-mq212h4r6-dylans-projects-54783701.vercel.app",
+    "doah-widget.vercel.app",
+    "https://dylandolevy.github.io"
   ];
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
