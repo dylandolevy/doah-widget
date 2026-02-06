@@ -1,6 +1,4 @@
 // api/chatkit/session.js
-// Dev-safe: do NOT throw during module load. Read env at module load for reliability,
-// but don't crash the function — instead return clear JSON for debugging.
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || null;
 const WORKFLOW_ID = process.env.CHATKIT_WORKFLOW_ID || null;
