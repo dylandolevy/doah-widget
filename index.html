@@ -1,201 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DoAH Workflow Chat</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    /* (same styles as before) */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+      min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
     }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    
-    .chat-container {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-      overflow: hidden;
-      width: 100%;
-      max-width: 600px;
-      height: 700px;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .chat-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 24px;
-      text-align: center;
-    }
-    
-    .chat-header h1 {
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    
-    .chat-header p {
-      font-size: 13px;
-      opacity: 0.9;
-    }
-    
-    .messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      background: #f8f9fa;
-    }
-    
-    .message {
-      margin-bottom: 16px;
-      display: flex;
-      gap: 12px;
-    }
-    
-    .message.user {
-      flex-direction: row-reverse;
-    }
-    
-    .message-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-    
-    .message.assistant .message-avatar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    .message.user .message-avatar {
-      background: #6c757d;
-    }
-    
-    .message-bubble {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      word-wrap: break-word;
-    }
-    
-    .message.assistant .message-bubble {
-      background: white;
-      border: 1px solid #e0e0e0;
-    }
-    
-    .message.user .message-bubble {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-    
-    .message-time {
-      font-size: 11px;
-      opacity: 0.6;
-      margin-top: 4px;
-    }
-    
-    .typing-indicator {
-      display: none;
-      padding: 12px 16px;
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      width: fit-content;
-    }
-    
-    .typing-indicator.active {
-      display: block;
-    }
-    
-    .typing-indicator span {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #667eea;
-      margin: 0 2px;
-      animation: typing 1.4s infinite;
-    }
-    
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    
-    @keyframes typing {
-      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-      30% { transform: translateY(-10px); opacity: 1; }
-    }
-    
-    .input-area {
-      padding: 16px 20px;
-      background: white;
-      border-top: 1px solid #e0e0e0;
-      display: flex;
-      gap: 12px;
-    }
-    
-    #message-input {
-      flex: 1;
-      padding: 12px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 24px;
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    
-    #message-input:focus {
-      border-color: #667eea;
-    }
-    
-    #send-btn {
-      padding: 12px 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 24px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 14px;
-      transition: transform 0.2s, opacity 0.2s;
-    }
-    
-    #send-btn:hover:not(:disabled) {
-      transform: scale(1.05);
-    }
-    
-    #send-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    .error-banner {
-      padding: 12px 20px;
-      background: #f8d7da;
-      color: #721c24;
-      font-size: 13px;
-      display: none;
-    }
-    
-    .error-banner.show {
-      display: block;
-    }
+    .chat-container{ background:white; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.2); overflow:hidden; width:100%; max-width:600px; height:700px; display:flex; flex-direction:column; }
+    .chat-header{ background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; padding:24px; text-align:center; }
+    .chat-header h1{ font-size:24px; font-weight:700; margin-bottom:4px; }
+    .chat-header p{ font-size:13px; opacity:.9; }
+    .messages{ flex:1; overflow-y:auto; padding:20px; background:#f8f9fa; }
+    .message{ margin-bottom:16px; display:flex; gap:12px; }
+    .message.user{ flex-direction:row-reverse; }
+    .message-avatar{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .message.assistant .message-avatar{ background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
+    .message.user .message-avatar{ background:#6c757d; }
+    .message-bubble{ max-width:70%; padding:12px 16px; border-radius:12px; word-wrap:break-word; }
+    .message.assistant .message-bubble{ background:white; border:1px solid #e0e0e0; }
+    .message.user .message-bubble{ background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; }
+    .message-time{ font-size:11px; opacity:.6; margin-top:4px; }
+    .typing-indicator{ display:none; padding:12px 16px; background:white; border:1px solid #e0e0e0; border-radius:12px; width:fit-content; }
+    .typing-indicator.active{ display:block; }
+    .typing-indicator span{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#667eea; margin:0 2px; animation:typing 1.4s infinite; }
+    .typing-indicator span:nth-child(2){ animation-delay:.2s; } .typing-indicator span:nth-child(3){ animation-delay:.4s; }
+    @keyframes typing{ 0%,60%,100%{ transform:translateY(0); opacity:.5 } 30%{ transform:translateY(-10px); opacity:1 } }
+    .input-area{ padding:16px 20px; background:white; border-top:1px solid #e0e0e0; display:flex; gap:12px; }
+    #message-input{ flex:1; padding:12px 16px; border:2px solid #e0e0e0; border-radius:24px; font-size:14px; font-family:inherit; outline:none; transition:border-color .2s; }
+    #message-input:focus{ border-color:#667eea; }
+    #send-btn{ padding:12px 24px; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; border:none; border-radius:24px; cursor:pointer; font-weight:600; font-size:14px; transition:transform .2s, opacity .2s; }
+    #send-btn:hover:not(:disabled){ transform:scale(1.05); }
+    #send-btn:disabled{ opacity:.5; cursor:not-allowed; }
+    .error-banner{ padding:12px 20px; background:#f8d7da; color:#721c24; font-size:13px; display:none; }
+    .error-banner.show{ display:block; }
   </style>
 </head>
 <body>
@@ -204,9 +47,9 @@
       <h1>DoAH Assistant</h1>
       <p>Powered by OpenAI's Agent Builder</p>
     </div>
-    
+
     <div id="error-banner" class="error-banner"></div>
-    
+
     <div id="messages" class="messages">
       <div class="message assistant">
         <div class="message-avatar">🤖</div>
@@ -216,21 +59,14 @@
           </div>
         </div>
       </div>
-      
+
       <div id="typing" class="typing-indicator">
-        <span></span>
-        <span></span>
-        <span></span>
+        <span></span><span></span><span></span>
       </div>
     </div>
-    
+
     <div class="input-area">
-      <input 
-        type="text" 
-        id="message-input" 
-        placeholder="Type your message..."
-        autocomplete="off"
-      >
+      <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off" />
       <button id="send-btn">Send</button>
     </div>
   </div>
@@ -238,26 +74,26 @@
   <script>
     const VERCEL_API = 'https://doah-widget.vercel.app';
     let clientSecret = null;
-    let threadId = null;
-    
+    let sessionId = null;   // we now store session id (not thread_id)
+
     const messagesEl = document.getElementById('messages');
     const inputEl = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
     const typingEl = document.getElementById('typing');
     const errorBanner = document.getElementById('error-banner');
-    
+
     function showError(message) {
       errorBanner.textContent = message;
       errorBanner.classList.add('show');
       setTimeout(() => errorBanner.classList.remove('show'), 5000);
     }
-    
+
     function addMessage(text, role = 'user') {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${role}`;
-      
+
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
+
       messageDiv.innerHTML = `
         <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
         <div>
@@ -265,89 +101,117 @@
           <div class="message-time">${time}</div>
         </div>
       `;
-      
+
       messagesEl.insertBefore(messageDiv, typingEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
-    
+
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
     }
-    
+
+    // Create or reuse a session; return object { clientSecret, sessionId }
     async function ensureSession() {
-      if (clientSecret) return clientSecret;
-      
+      if (clientSecret && sessionId) return { clientSecret, sessionId };
+
       console.log('Creating session...');
       const res = await fetch(`${VERCEL_API}/api/chatkit/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: 'guest-' + Date.now() })
       });
-      
+
+      // Try to parse JSON body even on non-OK responses so we get hints
+      const body = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.hint || error.problem || 'Failed to create session');
+        const errMsg = body.hint || body.problem || `Session creation failed: HTTP ${res.status}`;
+        console.error('Session creation error:', body);
+        throw new Error(errMsg);
       }
-      
-      const data = await res.json();
-      clientSecret = data.client_secret;
-      console.log('Session created');
-      return clientSecret;
+
+      // server might return `client_secret` and `session_id` or `id`
+      clientSecret = body.client_secret || body.clientSecret || null;
+      sessionId = body.session_id || body.sessionId || body.id || null;
+
+      if (!clientSecret || !sessionId) {
+        console.error('Session response missing required fields:', body);
+        throw new Error('Session created but missing client_secret or session_id in response');
+      }
+
+      console.log('Session created, sessionId=', sessionId ? '[REDACTED]' : null);
+      return { clientSecret, sessionId };
     }
-    
+
     async function sendMessage() {
       const message = inputEl.value.trim();
       if (!message) return;
-      
+
       // Disable input
       inputEl.value = '';
       inputEl.disabled = true;
       sendBtn.disabled = true;
-      
+
       // Add user message
       addMessage(message, 'user');
-      
+
       // Show typing indicator
       typingEl.classList.add('active');
-      
+
       try {
         // Ensure we have a session
-        await ensureSession();
-        
-        // This is where you'd call your workflow endpoint
-        // For now, this is a placeholder - you'll need to implement
-        // the actual workflow message endpoint in Vercel
-        
+        const sess = await ensureSession();
+        const cs = sess.clientSecret;
+        const sid = sess.sessionId;
+
+        // send to Vercel message endpoint (server expects session_id)
         const res = await fetch(`${VERCEL_API}/api/chatkit/message`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            client_secret: clientSecret,
+            client_secret: cs,
             message: message,
-            thread_id: threadId
+            session_id: sid
           })
         });
-        
+
+        // parse JSON body even if non-ok
+        const body = await res.json().catch(() => ({}));
+
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          const errMsg = body.hint || body.problem || (`HTTP ${res.status}`);
+          console.error('Server returned error:', body);
+          throw new Error(errMsg);
         }
-        
-        const data = await res.json();
-        
-        // Update thread ID if provided
-        if (data.thread_id) {
-          threadId = data.thread_id;
+
+        // If server returns a thread/session id, update local store
+        // Accept `thread_id`, `session_id`, or `id` in response
+        if (body.thread_id) sessionId = body.thread_id;
+        else if (body.session_id) sessionId = body.session_id;
+        else if (body.id) sessionId = body.id;
+
+        // Try to extract assistant text. This will depend on the server/OpenAI response shape.
+        // Common patterns: data.choices[0].message.content, data.output, data.response
+        let assistantText = 'I received your message!';
+        if (body.response) assistantText = body.response;
+        else if (body.output && typeof body.output === 'string') assistantText = body.output;
+        else if (Array.isArray(body.choices) && body.choices[0] && body.choices[0].message) {
+          assistantText = body.choices[0].message.content || assistantText;
+        } else if (body.choices && body.choices[0] && body.choices[0].text) {
+          assistantText = body.choices[0].text;
+        } else if (body.message || body.content) {
+          assistantText = body.message || body.content;
         }
-        
-        // Add assistant response
-        addMessage(data.response || 'I received your message!', 'assistant');
-        
+
+        addMessage(assistantText, 'assistant');
+
       } catch (error) {
         console.error('Send error:', error);
-        showError('Failed to send message: ' + error.message);
+        showError('Failed to send message: ' + (error.message || String(error)));
         addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+
       } finally {
         // Re-enable input
         typingEl.classList.remove('active');
@@ -356,21 +220,21 @@
         inputEl.focus();
       }
     }
-    
+
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
-    
+
     inputEl.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     });
-    
+
     // Initialize session on load
     window.addEventListener('load', () => {
       ensureSession().catch(err => {
-        showError('Failed to initialize: ' + err.message);
+        showError('Failed to initialize: ' + (err.message || String(err)));
       });
     });
   </script>
