@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ChatKit Workflow Widget</title>
+  <title>DoAH Workflow Chat</title>
   <style>
     * {
       margin: 0;
@@ -21,231 +21,358 @@
       padding: 20px;
     }
     
-    .container {
+    .chat-container {
       background: white;
       border-radius: 16px;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
       overflow: hidden;
       width: 100%;
-      max-width: 450px;
+      max-width: 600px;
+      height: 700px;
+      display: flex;
+      flex-direction: column;
     }
     
-    .header {
+    .chat-header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       padding: 24px;
       text-align: center;
     }
     
-    .header h1 {
-      font-size: 28px;
+    .chat-header h1 {
+      font-size: 24px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
     
-    .header p {
-      font-size: 14px;
+    .chat-header p {
+      font-size: 13px;
       opacity: 0.9;
     }
     
-    .status {
-      padding: 12px 24px;
-      font-size: 14px;
-      font-weight: 500;
-      text-align: center;
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: #f8f9fa;
     }
     
-    .status.loading {
-      background: #fff3cd;
-      color: #856404;
+    .message {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
     }
     
-    .status.success {
-      background: #d4edda;
-      color: #155724;
+    .message.user {
+      flex-direction: row-reverse;
     }
     
-    .status.error {
-      background: #f8d7da;
-      color: #721c24;
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
     }
     
-    .status.info {
-      background: #d1ecf1;
-      color: #0c5460;
+    .message.assistant .message-avatar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    #my-chat {
-      width: 100%;
-      height: 600px;
-      background: #fafafa;
+    .message.user .message-avatar {
+      background: #6c757d;
     }
     
-    button {
-      margin: 12px 24px;
-      padding: 10px 20px;
+    .message-bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      word-wrap: break-word;
+    }
+    
+    .message.assistant .message-bubble {
+      background: white;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .message.user .message-bubble {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .message-time {
+      font-size: 11px;
+      opacity: 0.6;
+      margin-top: 4px;
+    }
+    
+    .typing-indicator {
+      display: none;
+      padding: 12px 16px;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      width: fit-content;
+    }
+    
+    .typing-indicator.active {
+      display: block;
+    }
+    
+    .typing-indicator span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
       background: #667eea;
+      margin: 0 2px;
+      animation: typing 1.4s infinite;
+    }
+    
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-10px); opacity: 1; }
+    }
+    
+    .input-area {
+      padding: 16px 20px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      gap: 12px;
+    }
+    
+    #message-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 24px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    #message-input:focus {
+      border-color: #667eea;
+    }
+    
+    #send-btn {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
-      border-radius: 6px;
+      border-radius: 24px;
       cursor: pointer;
-      font-size: 14px;
       font-weight: 600;
+      font-size: 14px;
+      transition: transform 0.2s, opacity 0.2s;
     }
     
-    button:hover {
-      background: #5568d3;
+    #send-btn:hover:not(:disabled) {
+      transform: scale(1.05);
     }
     
-    .loading-spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #667eea;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
+    #send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    .error-banner {
+      padding: 12px 20px;
+      background: #f8d7da;
+      color: #721c24;
+      font-size: 13px;
+      display: none;
+    }
+    
+    .error-banner.show {
+      display: block;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
+  <div class="chat-container">
+    <div class="chat-header">
       <h1>🤖 DoAH Assistant</h1>
-      <p>Powered by OpenAI Workflow</p>
+      <p>Powered by OpenAI</p>
     </div>
     
-    <div id="status" class="status loading">
-      <span class="loading-spinner"></span>
-      Initializing ChatKit...
+    <div id="error-banner" class="error-banner"></div>
+    
+    <div id="messages" class="messages">
+      <div class="message assistant">
+        <div class="message-avatar">🤖</div>
+        <div>
+          <div class="message-bubble">
+            Hello! I'm your DoAH Assistant. How can I help you today?
+          </div>
+        </div>
+      </div>
+      
+      <div id="typing" class="typing-indicator">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
     </div>
     
-    <button id="reload-btn" style="display: none;" onclick="window.location.reload()">
-      Reload Widget
-    </button>
-    
-    <!-- ChatKit will mount here -->
-    <div id="my-chat"></div>
+    <div class="input-area">
+      <input 
+        type="text" 
+        id="message-input" 
+        placeholder="Type your message..."
+        autocomplete="off"
+      >
+      <button id="send-btn">Send</button>
+    </div>
   </div>
 
   <script>
     const VERCEL_API = 'https://doah-widget.vercel.app';
+    let clientSecret = null;
+    let threadId = null;
     
-    function updateStatus(message, type = 'loading') {
-      const el = document.getElementById('status');
-      const spinner = type === 'loading' ? '<span class="loading-spinner"></span>' : '';
-      el.innerHTML = spinner + message;
-      el.className = `status ${type}`;
-      console.log(`[${type.toUpperCase()}] ${message}`);
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const typingEl = document.getElementById('typing');
+    const errorBanner = document.getElementById('error-banner');
+    
+    function showError(message) {
+      errorBanner.textContent = message;
+      errorBanner.classList.add('show');
+      setTimeout(() => errorBanner.classList.remove('show'), 5000);
     }
     
-    // Global API configuration for ChatKit
-    window.chatkitAPI = {
-      async getClientSecret(currentClientSecret) {
-        try {
-          if (!currentClientSecret) {
-            updateStatus('Creating session...', 'loading');
-            console.log('Creating new session...');
-            
-            const res = await fetch(`${VERCEL_API}/api/chatkit/session`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user: 'guest-' + Date.now() })
-            });
-            
-            if (!res.ok) {
-              const errorData = await res.json();
-              throw new Error(errorData.problem || errorData.hint || `HTTP ${res.status}`);
-            }
-            
-            const data = await res.json();
-            console.log('Session response:', data);
-            
-            if (!data.client_secret) {
-              throw new Error('No client_secret in response');
-            }
-            
-            updateStatus('✅ Connected!', 'success');
-            setTimeout(() => {
-              const statusEl = document.getElementById('status');
-              statusEl.style.display = 'none';
-            }, 2000);
-            
-            return data.client_secret;
-          }
-          
-          // Refresh session
-          console.log('Refreshing session...');
-          updateStatus('Refreshing...', 'loading');
-          
-          const res = await fetch(`${VERCEL_API}/api/chatkit/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_secret: currentClientSecret })
-          });
-          
-          if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.problem || errorData.hint || `HTTP ${res.status}`);
-          }
-          
-          const data = await res.json();
-          console.log('Session refreshed');
-          return data.client_secret;
-          
-        } catch (error) {
-          updateStatus(`❌ Error: ${error.message}`, 'error');
-          document.getElementById('reload-btn').style.display = 'block';
-          console.error('API error:', error);
-          throw error;
-        }
-      }
-    };
-    
-    // Initialize ChatKit when script loads
-    function initChatKit() {
-      updateStatus('Configuring ChatKit...', 'loading');
+    function addMessage(text, role = 'user') {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
       
-      const container = document.getElementById('my-chat');
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
-      // Check if ChatKit loaded and added methods to the container
-      if (container && typeof container.setOptions === 'function') {
-        console.log('Using setOptions method');
-        container.setOptions({
-          api: window.chatkitAPI
-        });
-      } else {
-        console.log('Waiting for ChatKit to inject into container...');
-        // ChatKit might inject itself automatically
-        // Just wait and see if it works
-        setTimeout(() => {
-          if (container && typeof container.setOptions === 'function') {
-            container.setOptions({ api: window.chatkitAPI });
-          } else {
-            updateStatus('⚠️ ChatKit loading... Please wait', 'info');
-          }
-        }, 2000);
-      }
+      messageDiv.innerHTML = `
+        <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
+        <div>
+          <div class="message-bubble">${escapeHtml(text)}</div>
+          <div class="message-time">${time}</div>
+        </div>
+      `;
+      
+      messagesEl.insertBefore(messageDiv, typingEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
     
-    // Wait for DOM and script
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(initChatKit, 1000);
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    async function ensureSession() {
+      if (clientSecret) return clientSecret;
+      
+      console.log('Creating session...');
+      const res = await fetch(`${VERCEL_API}/api/chatkit/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: 'guest-' + Date.now() })
       });
-    } else {
-      setTimeout(initChatKit, 1000);
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.hint || error.problem || 'Failed to create session');
+      }
+      
+      const data = await res.json();
+      clientSecret = data.client_secret;
+      console.log('Session created');
+      return clientSecret;
     }
+    
+    async function sendMessage() {
+      const message = inputEl.value.trim();
+      if (!message) return;
+      
+      // Disable input
+      inputEl.value = '';
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+      
+      // Add user message
+      addMessage(message, 'user');
+      
+      // Show typing indicator
+      typingEl.classList.add('active');
+      
+      try {
+        // Ensure we have a session
+        await ensureSession();
+        
+        // This is where you'd call your workflow endpoint
+        // For now, this is a placeholder - you'll need to implement
+        // the actual workflow message endpoint in Vercel
+        
+        const res = await fetch(`${VERCEL_API}/api/chatkit/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_secret: clientSecret,
+            message: message,
+            thread_id: threadId
+          })
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        
+        // Update thread ID if provided
+        if (data.thread_id) {
+          threadId = data.thread_id;
+        }
+        
+        // Add assistant response
+        addMessage(data.response || 'I received your message!', 'assistant');
+        
+      } catch (error) {
+        console.error('Send error:', error);
+        showError('Failed to send message: ' + error.message);
+        addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+      } finally {
+        // Re-enable input
+        typingEl.classList.remove('active');
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+    
+    // Event listeners
+    sendBtn.addEventListener('click', sendMessage);
+    
+    inputEl.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    // Initialize session on load
+    window.addEventListener('load', () => {
+      ensureSession().catch(err => {
+        showError('Failed to initialize: ' + err.message);
+      });
+    });
   </script>
-  
-  <!-- Load ChatKit CDN -->
-  <script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" async></script>
 </body>
 </html>
