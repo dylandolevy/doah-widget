@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const { client_secret, message, thread_id } = req.body;
+    const { client_secret, message, session_id } = req.body;
 
     if (!client_secret) {
       return res.status(400).json({
@@ -40,20 +40,20 @@ export default async function handler(req, res) {
       });
     }
 
-    // Build request body
-    const requestBody = {
-      message: message
-    };
-
-    // Include thread_id if provided (for continuing conversations)
-    if (thread_id) {
-      requestBody.thread_id = thread_id;
+    if (!session_id) {
+      return res.status(400).json({
+        ok: false,
+        problem: "MISSING_SESSION_ID",
+        hint: "session_id is required. This should be the 'id' field from the session creation response."
+      });
     }
 
-    console.log('Sending message to OpenAI workflow...');
+    console.log('Sending message to ChatKit session:', session_id);
 
-    // Send message to OpenAI ChatKit workflow
-    const resp = await fetch("https://api.openai.com/v1/chatkit/messages", {
+    // CORRECTED: Use session ID in the URL
+    const apiUrl = `https://api.openai.com/v1/chatkit/sessions/${session_id}/messages`;
+    
+    const resp = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -61,7 +61,9 @@ export default async function handler(req, res) {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "ChatKit-Client-Secret": client_secret
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({
+        content: message  // ChatKit might use 'content' instead of 'message'
+      })
     });
 
     const data = await resp.json();
@@ -71,14 +73,14 @@ export default async function handler(req, res) {
       return res.status(resp.status).json({ 
         ok: false, 
         problem: "OPENAI_ERROR", 
-        details: data 
+        details: data,
+        attempted_url: apiUrl
       });
     }
 
     console.log('Message sent successfully');
 
     // Return the response from OpenAI
-    // This should include the assistant's response and thread_id
     return res.status(200).json(data);
 
   } catch (err) {
