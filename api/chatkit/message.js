@@ -3,7 +3,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || null;
 
 export default async function handler(req, res) {
   try {
-    // CORS headers
+    // CORS
     const origin = req.headers.origin;
     if (req.method === "OPTIONS") {
       res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
@@ -13,7 +13,6 @@ export default async function handler(req, res) {
     }
     if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
 
-    // Check for API key
     if (!OPENAI_API_KEY) {
       return res.status(500).json({
         ok: false,
@@ -22,13 +21,13 @@ export default async function handler(req, res) {
       });
     }
 
-    // Accept either session_id or thread_id for compatibility
+    // Accept session_id or thread_id from client for flexibility
     const { client_secret, message } = req.body || {};
-    let session_id = req.body && (req.body.session_id || req.body.thread_id || req.body.id || null);
+    let session_id = req.body && (req.body.session_id || req.body.sessionId || null);
+    let thread_id = req.body && (req.body.thread_id || req.body.threadId || null);
 
-    // Debug logging (keep lightweight; don't log secrets in production)
-    console.log('Incoming /api/chatkit/message request body keys:', Object.keys(req.body || {}));
-    console.log('Resolved session_id:', session_id ? '[REDACTED]' : null);
+    console.log('Incoming /api/chatkit/message keys:', Object.keys(req.body || {}));
+    console.log('Has client_secret:', !!client_secret, 'session_id present:', !!session_id, 'thread_id present:', !!thread_id);
 
     if (!client_secret) {
       return res.status(400).json({
@@ -46,19 +45,45 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!session_id) {
-      return res.status(400).json({
-        ok: false,
-        problem: "MISSING_SESSION_ID",
-        hint: "session_id is required. This should be the 'id' or 'session_id' field from the session creation response."
-      });
+    // We'll attempt to append to an existing thread (if provided),
+    // otherwise create a new thread on behalf of the session.
+    // ChatKit primarily exposes threads/items, not sessions/{id}/messages. See docs.
+    // If you want the frontend to talk directly to OpenAI, hand it the client_secret instead.
+    const base = "https://api.openai.com/v1/chatkit";
+    let apiUrl;
+    let body;
+
+    if (thread_id) {
+      // append to an existing thread
+      apiUrl = `${base}/threads/${thread_id}/items`;
+      // thread items generally expect a structure; we'll use a plain user_message item shape
+      body = {
+        // include session_id if available so OpenAI can check session scope
+        session_id: session_id || undefined,
+        // item payload: type and content. If the schema is different, OpenAI will return an informative error.
+        type: "user_message",
+        content: [
+          { type: "input_text", text: message }
+        ]
+      };
+    } else {
+      // create a new thread (initial user message)
+      apiUrl = `${base}/threads`;
+      body = {
+        session_id: session_id || undefined,
+        // minimal thread creation payload — server will tell us if fields differ
+        initial_items: [
+          {
+            type: "user_message",
+            content: [
+              { type: "input_text", text: message }
+            ]
+          }
+        ]
+      };
     }
 
-    console.log('Sending message to ChatKit session:', '[REDACTED]');
-
-    // Use session ID in the URL
-    const apiUrl = `https://api.openai.com/v1/chatkit/sessions/${session_id}/messages`;
-
+    // Send to OpenAI ChatKit endpoints
     const resp = await fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -67,15 +92,19 @@ export default async function handler(req, res) {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "ChatKit-Client-Secret": client_secret
       },
-      body: JSON.stringify({
-        content: message
-      })
+      body: JSON.stringify(body)
     });
 
+    // Parse JSON robustly
     const data = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      console.error("OpenAI response error:", data);
+      // Return the OpenAI error to the client for debugging (useful during dev)
+      console.error("OpenAI ChatKit error:", {
+        status: resp.status,
+        attempted_url: apiUrl,
+        body: data
+      });
       return res.status(resp.status).json({
         ok: false,
         problem: "OPENAI_ERROR",
@@ -84,9 +113,8 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('Message sent successfully to ChatKit');
-
-    // Return the response from OpenAI
+    // success — forward the OpenAI response
+    console.log('ChatKit request success:', { attempted_url: apiUrl });
     return res.status(200).json(data);
 
   } catch (err) {
