@@ -1,222 +1,54 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
   <meta charset="utf-8" />
+  <title>DoAH — ChatKit Embed</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DoAH Assistant</title>
-
-  <style>
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    body{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:linear-gradient(135deg,#667eea,#764ba2);
-      padding:20px
-    }
-    .chat-container{
-      width:100%;
-      max-width:700px;
-      background:#fff;
-      border-radius:12px;
-      box-shadow:0 10px 30px rgba(0,0,0,.15);
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-      height:700px
-    }
-    .chat-header{
-      padding:20px;
-      background:linear-gradient(135deg,#667eea,#764ba2);
-      color:white
-    }
-    .messages{
-      flex:1;
-      padding:16px;
-      overflow:auto;
-      background:#f7f8fb
-    }
-    .input-area{
-      display:flex;
-      gap:8px;
-      padding:12px;
-      background:#fff;
-      border-top:1px solid #eee
-    }
-    #message-input{
-      flex:1;
-      padding:10px;
-      border-radius:8px;
-      border:1px solid #ddd
-    }
-    #send-btn{
-      padding:10px 16px;
-      border-radius:8px;
-      border:none;
-      background:#667eea;
-      color:#fff;
-      cursor:pointer
-    }
-    .error-banner{
-      display:none;
-      padding:10px;
-      background:#fdecea;
-      color:#611;
-      margin:12px
-    }
-    .error-banner.show{display:block}
-    .message{margin-bottom:12px}
-    .assistant{color:#111}
-    .user{color:#444;text-align:right}
-  </style>
+  <style>body{margin:0;font-family:system-ui}#chat-root{height:100vh}</style>
 </head>
 <body>
+  <div id="chat-root"></div>
 
-  <div class="chat-container">
-    <div class="chat-header">
-      <strong>DoAH Assistant</strong>
-      <div style="font-size:12px;opacity:.9">
-        Using Vercel proxy (no CORS issues)
-      </div>
-    </div>
+  <!-- Load ChatKit web component from OpenAI's hosted package (CDN). -->
+  <!-- If your policy or network blocks jsDelivr, use the recommended script url from docs. -->
+  <script src="https://cdn.jsdelivr.net/npm/@openai/chatkit@latest/dist/chatkit.min.js"></script>
 
-    <div id="error-banner" class="error-banner"></div>
+  <script>
+    // Gets called by ChatKit to obtain client_secret for the widget.
+    async function getClientSecret(currentClientSecret) {
+      // If we already have an unexpired secret, return it
+      if (currentClientSecret) return currentClientSecret;
 
-    <div id="messages" class="messages">
-      <div class="message assistant">🤖 Hello! Ready.</div>
-    </div>
-
-    <div class="input-area">
-      <input id="message-input" placeholder="Type a message..." autocomplete="off" />
-      <button id="send-btn">Send</button>
-    </div>
-  </div>
-
-<script>
-const messagesEl = document.getElementById("messages");
-const inputEl = document.getElementById("message-input");
-const sendBtn = document.getElementById("send-btn");
-const errorBanner = document.getElementById("error-banner");
-
-let clientSecret = null;
-let threadId = null;
-
-// ---------------- UI Helpers ----------------
-
-function showError(msg){
-  console.error(msg);
-  errorBanner.textContent = msg;
-  errorBanner.classList.add("show");
-  setTimeout(()=>errorBanner.classList.remove("show"),5000);
-}
-
-function addMessage(text, role="assistant"){
-  const d = document.createElement("div");
-  d.className = "message " + role;
-  d.textContent = (role === "user" ? "👤 " : "🤖 ") + text;
-  messagesEl.appendChild(d);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-// ---------------- Session ----------------
-
-async function ensureSession(){
-  if(clientSecret) return;
-
-  const res = await fetch("/api/chatkit/session",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ user:"guest-"+Date.now() })
-  });
-
-  const data = await res.json().catch(()=>({}));
-
-  if(!res.ok){
-    throw new Error(data.hint || data.problem || "Session failed");
-  }
-
-  clientSecret = data.client_secret;
-  console.log("Session created");
-}
-
-// ---------------- Send Message ----------------
-
-async function sendMessage(){
-  const text = inputEl.value.trim();
-  if(!text) return;
-
-  inputEl.value="";
-  addMessage(text,"user");
-
-  const placeholder = document.createElement("div");
-  placeholder.className="message assistant";
-  placeholder.textContent="🤖 ...thinking";
-  messagesEl.appendChild(placeholder);
-
-  try{
-    await ensureSession();
-
-    const res = await fetch("/api/chatkit/message",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({
-        client_secret:clientSecret,
-        message:text,
-        thread_id:threadId
-      })
-    });
-
-    const data = await res.json().catch(()=>({}));
-
-    if(!res.ok){
-      console.error("Server error:",data);
-      throw new Error(
-        data.details?.error?.message ||
-        data.problem ||
-        "Message failed"
-      );
-    }
-
-    if(data.thread_id){
-      threadId = data.thread_id;
-    }
-
-    // Extract assistant text from OpenAI response
-    let assistantText = "No response";
-
-    if(data.output){
-      assistantText = data.output;
-    }
-    else if(data.items){
-      const items = [...data.items].reverse();
-      const assistantItem = items.find(i =>
-        i.type && i.type.includes("assistant")
-      );
-      if(assistantItem?.content?.[0]?.text){
-        assistantText = assistantItem.content[0].text;
+      // Else fetch one from our server
+      const res = await fetch('/api/chatkit/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: 'guest-' + Date.now() })
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        console.error('Failed to get client_secret', body);
+        throw new Error(body.hint || body.problem || 'Session creation failed');
       }
+      return body.client_secret;
     }
 
-    placeholder.textContent = "🤖 " + assistantText;
+    (async () => {
+      // Create the ChatKit element and mount into the DOM
+      const chatkit = document.createElement('openai-chatkit');
 
-  }catch(err){
-    placeholder.textContent = "🤖 Error";
-    showError(err.message);
-  }
-}
+      // The widget uses the getClientSecret method internally
+      chatkit.setOptions({
+        api: {
+          async getClientSecret(currentClientSecret) {
+            return await getClientSecret(currentClientSecret);
+          }
+        },
+        // Optional UI/customization options here (title, placeholder, theme...)
+      });
 
-// ---------------- Events ----------------
-
-sendBtn.addEventListener("click",sendMessage);
-
-inputEl.addEventListener("keydown",(e)=>{
-  if(e.key==="Enter"){
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-</script>
-
+      document.getElementById('chat-root').appendChild(chatkit);
+    })();
+  </script>
 </body>
 </html>
