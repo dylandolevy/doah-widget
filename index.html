@@ -1,185 +1,412 @@
-<script>
-(() => {
-  // Replace with your deployed Vercel base URL (no trailing slash)
-  const VERCEL_BASE = "https://doah-widget.vercel.app";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatKit Widget</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #my-chat {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+    #reload-widget {
+      padding: 10px 20px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #reload-widget:hover {
+      background: #0052a3;
+    }
+    #debug {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f8f8f8;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 200px;
+      overflow: auto;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .status.loading {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+    }
+    .status.success {
+      background: #d4edda;
+      border: 1px solid #28a745;
+    }
+    .status.error {
+      background: #f8d7da;
+      border: 1px solid #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ChatKit Widget Demo</h1>
+    
+    <div id="status-message" class="status loading">
+      Initializing ChatKit...
+    </div>
+    
+    <button id="reload-widget">Reload Widget</button>
+    
+    <!-- ChatKit Container -->
+    <div id="my-chat"></div>
+    
+    <!-- Debug Output -->
+    <h3>Debug Info:</h3>
+    <pre id="debug">Waiting for initialization...</pre>
+  </div>
 
-  // in-memory cache for current client secret and expiry
-  let cachedSecret = null;
-  let cachedExpiresAt = 0; // unix seconds
-
-  function debugLog(obj) {
-    try { document.getElementById("debug").textContent = JSON.stringify(obj, null, 2); } catch(e) {}
-    console.debug("ChatKit debug:", obj);
-  }
-
-  async function requestNewSession(userId = null) {
-    const body = userId ? { user: userId } : {};
-    const res = await fetch(`${VERCEL_BASE}/api/chatkit/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const j = await res.json();
-    if (!res.ok) throw new Error("session creation failed: " + (j?.error?.message || JSON.stringify(j)));
-    cachedSecret = j.client_secret;
-    if (j.expires_at) cachedExpiresAt = Number(j.expires_at);
-    debugLog({ action: "new_session", payload: j });
-    return cachedSecret;
-  }
-
-  async function refreshSession(currentSecret) {
-    const res = await fetch(`${VERCEL_BASE}/api/chatkit/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_secret: currentSecret })
-    });
-    const j = await res.json();
-    if (!res.ok) throw new Error("refresh failed: " + (j?.error?.message || JSON.stringify(j)));
-    cachedSecret = j.client_secret;
-    if (j.expires_at) cachedExpiresAt = Number(j.expires_at);
-    debugLog({ action: "refresh", payload: j });
-    return cachedSecret;
-  }
-
-  async function getClientSecret(currentClientSecret) {
-    try {
-      if (!currentClientSecret && !cachedSecret) return await requestNewSession("guest-" + Date.now());
-      if (currentClientSecret && !cachedSecret) {
-        cachedSecret = currentClientSecret;
-        return await requestNewSession();
+  <script>
+  (() => {
+    // ===== CONFIGURATION =====
+    // IMPORTANT: Replace with your actual Vercel deployment URL
+    const VERCEL_BASE = "https://doah-widget.vercel.app";
+    
+    // ===== STATE =====
+    let cachedSecret = null;
+    let cachedExpiresAt = 0;
+    
+    // ===== UTILITY FUNCTIONS =====
+    function updateStatus(message, type = 'loading') {
+      const el = document.getElementById("status-message");
+      if (el) {
+        el.textContent = message;
+        el.className = `status ${type}`;
       }
-      const nowSec = Math.floor(Date.now() / 1000);
-      const secondsLeft = cachedExpiresAt - nowSec;
-      if (cachedExpiresAt && secondsLeft <= 30) return await refreshSession(cachedSecret);
-      return cachedSecret;
-    } catch (err) {
-      console.error("getClientSecret error:", err);
-      debugLog({ action: "error", message: String(err) });
-      throw err;
+      console.log(`[STATUS ${type.toUpperCase()}]`, message);
     }
-  }
-
-  // robust mounting logic (unchanged)
-  function getChatKitConstructor() {
-    if (typeof window.ChatKit === "function") return window.ChatKit;
-    if (window.ChatKit && typeof window.ChatKit.default === "function") return window.ChatKit.default;
-    if (window.ChatKit && typeof window.ChatKit.ChatKit === "function") return window.ChatKit.ChatKit;
-    if (window.ChatKit && typeof window.ChatKit.mount === "function") return window.ChatKit.mount;
-    return null;
-  }
-
-  async function mountChat() {
-    const chatEl = document.getElementById("my-chat");
-    if (!chatEl) { console.error("mountChat: #my-chat not found"); return; }
-
-    if (chatEl.chatkit && chatEl.chatkit.setOptions) {
-      console.log("mountChat: widget already mounted — updating options");
+    
+    function debugLog(obj) {
+      const debugEl = document.getElementById("debug");
+      if (debugEl) {
+        debugEl.textContent = JSON.stringify(obj, null, 2);
+      }
+      console.debug("ChatKit debug:", obj);
+    }
+    
+    // ===== API FUNCTIONS =====
+    async function requestNewSession(userId = null) {
+      updateStatus("Requesting new session...", "loading");
+      const body = userId ? { user: userId } : {};
+      
       try {
-        await chatEl.chatkit.setOptions({
-          api: { async getClientSecret(current) { return await getClientSecret(current); } }
+        const res = await fetch(`${VERCEL_BASE}/api/chatkit/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
         });
-      } catch (e) { console.error("mountChat update failed:", e); }
-      return;
-    }
-
-    const start = Date.now();
-    while (!window.ChatKit && Date.now() - start < 8000) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-
-    const CtorOrMount = getChatKitConstructor();
-    if (!CtorOrMount) {
-      console.error("mountChat: no ChatKit constructor found. window.ChatKit =", window.ChatKit);
-      try { document.getElementById("debug").textContent = JSON.stringify(window.ChatKit, Object.getOwnPropertyNames(window.ChatKit||{}), 2); } catch(e) {}
-      return;
-    }
-
-    try {
-      let instance;
-      if (CtorOrMount === window.ChatKit?.mount) {
-        instance = await CtorOrMount(chatEl, {
-          api: { async getClientSecret(current) { return await getClientSecret(current); } }
-        });
-      } else {
-        instance = new CtorOrMount(chatEl);
-        if (instance && typeof instance.setOptions === "function") {
-          await instance.setOptions({
-            api: { async getClientSecret(current) { return await getClientSecret(current); } }
-          });
-        } else if (typeof instance === "object" && instance !== null) {
-          console.warn("mountChat: created ChatKit instance but no setOptions found. instance:", instance);
+        
+        const j = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(`Session creation failed: ${j?.error?.message || JSON.stringify(j)}`);
         }
+        
+        cachedSecret = j.client_secret;
+        if (j.expires_at) {
+          cachedExpiresAt = Number(j.expires_at);
+        }
+        
+        debugLog({ 
+          action: "new_session", 
+          payload: j,
+          expiresIn: cachedExpiresAt - Math.floor(Date.now() / 1000)
+        });
+        
+        updateStatus("Session created successfully", "success");
+        return cachedSecret;
+      } catch (err) {
+        updateStatus(`Session error: ${err.message}`, "error");
+        throw err;
       }
-      chatEl.chatkit = instance || { mountedWithMountFn: true };
-      console.log("mountChat: ChatKit mounted", chatEl.chatkit);
-    } catch (err) {
-      console.error("mountChat: failed to instantiate ChatKit:", err);
     }
-  }
-
-  // Reload button handler
-  document.getElementById("reload-widget").addEventListener("click", async () => {
-    const chatEl = document.getElementById("my-chat");
-    if (chatEl && chatEl.chatkit) {
+    
+    async function refreshSession(currentSecret) {
+      updateStatus("Refreshing session...", "loading");
+      
       try {
-        if (typeof chatEl.chatkit.unmount === "function") chatEl.chatkit.unmount();
-        else chatEl.innerHTML = "";
-      } catch (e) {
-        console.warn("reload: unmount failed:", e);
-        chatEl.innerHTML = "";
+        const res = await fetch(`${VERCEL_BASE}/api/chatkit/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_secret: currentSecret })
+        });
+        
+        const j = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(`Refresh failed: ${j?.error?.message || JSON.stringify(j)}`);
+        }
+        
+        cachedSecret = j.client_secret;
+        if (j.expires_at) {
+          cachedExpiresAt = Number(j.expires_at);
+        }
+        
+        debugLog({ action: "refresh", payload: j });
+        updateStatus("Session refreshed", "success");
+        return cachedSecret;
+      } catch (err) {
+        updateStatus(`Refresh error: ${err.message}`, "error");
+        throw err;
       }
-      chatEl.chatkit = null;
-    } else if (chatEl) {
-      chatEl.innerHTML = "";
     }
-    cachedSecret = null; cachedExpiresAt = 0;
-    await new Promise(r => setTimeout(r, 100));
-    await loadAndMountChatKit(); // ensure we load the script if needed
-  });
-
-  // DYNAMIC SCRIPT LOADER: ensures the CDN script actually loads
-  function loadScriptOnce(src, timeout = 8000) {
-    return new Promise((resolve, reject) => {
-      // If already available, resolve immediately
-      if (window.ChatKit) return resolve(window.ChatKit);
-
-      // If a script tag with same src exists, attach to its events
-      const existing = Array.from(document.getElementsByTagName("script")).find(s => s.src === src);
-      if (existing) {
-        existing.addEventListener("load", () => resolve(window.ChatKit));
-        existing.addEventListener("error", (e) => reject(new Error("Script load error")));
+    
+    async function getClientSecret(currentClientSecret) {
+      try {
+        // No session exists yet
+        if (!currentClientSecret && !cachedSecret) {
+          return await requestNewSession("guest-" + Date.now());
+        }
+        
+        // Has current secret but not cached
+        if (currentClientSecret && !cachedSecret) {
+          cachedSecret = currentClientSecret;
+          return cachedSecret;
+        }
+        
+        // Check if we need to refresh
+        const nowSec = Math.floor(Date.now() / 1000);
+        const secondsLeft = cachedExpiresAt - nowSec;
+        
+        if (cachedExpiresAt && secondsLeft <= 30) {
+          return await refreshSession(cachedSecret);
+        }
+        
+        return cachedSecret;
+      } catch (err) {
+        console.error("getClientSecret error:", err);
+        debugLog({ action: "error", message: String(err) });
+        throw err;
+      }
+    }
+    
+    // ===== CHATKIT MOUNTING =====
+    function getChatKitConstructor() {
+      if (typeof window.ChatKit === "function") return window.ChatKit;
+      if (window.ChatKit && typeof window.ChatKit.default === "function") return window.ChatKit.default;
+      if (window.ChatKit && typeof window.ChatKit.ChatKit === "function") return window.ChatKit.ChatKit;
+      if (window.ChatKit && typeof window.ChatKit.mount === "function") return window.ChatKit.mount;
+      return null;
+    }
+    
+    async function mountChat() {
+      updateStatus("Mounting ChatKit widget...", "loading");
+      const chatEl = document.getElementById("my-chat");
+      
+      if (!chatEl) {
+        updateStatus("Error: #my-chat element not found", "error");
+        console.error("mountChat: #my-chat not found");
         return;
       }
-
-      const s = document.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.onload = () => resolve(window.ChatKit);
-      s.onerror = () => reject(new Error("Failed to load ChatKit script " + src));
-      document.head.appendChild(s);
-
-      setTimeout(() => {
-        reject(new Error("Timed out loading ChatKit script: " + src));
-      }, timeout);
-    });
-  }
-
-  // orchestrator: load script then mount
-  async function loadAndMountChatKit() {
-    const CHATKIT_SRC = "https://cdn.platform.openai.com/deployments/chatkit/chatkit.js";
-    try {
-      await loadScriptOnce(CHATKIT_SRC, 10000);
-      console.log("ChatKit script loaded, attempting mount");
-      await mountChat();
-    } catch (err) {
-      console.error("Error loading ChatKit script:", err);
-      debugLog({ action: "script_load_failed", message: String(err) });
+      
+      // Check if already mounted
+      if (chatEl.chatkit && chatEl.chatkit.setOptions) {
+        console.log("mountChat: widget already mounted — updating options");
+        try {
+          await chatEl.chatkit.setOptions({
+            api: { 
+              async getClientSecret(current) { 
+                return await getClientSecret(current); 
+              } 
+            }
+          });
+          updateStatus("Widget options updated", "success");
+        } catch (e) {
+          updateStatus(`Update failed: ${e.message}`, "error");
+          console.error("mountChat update failed:", e);
+        }
+        return;
+      }
+      
+      // Wait for ChatKit to be available
+      const start = Date.now();
+      while (!window.ChatKit && Date.now() - start < 10000) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      
+      const CtorOrMount = getChatKitConstructor();
+      if (!CtorOrMount) {
+        updateStatus("Error: ChatKit constructor not found", "error");
+        console.error("mountChat: no ChatKit constructor found. window.ChatKit =", window.ChatKit);
+        debugLog({ 
+          error: "No ChatKit constructor",
+          windowChatKit: window.ChatKit,
+          keys: Object.keys(window.ChatKit || {})
+        });
+        return;
+      }
+      
+      try {
+        let instance;
+        
+        if (CtorOrMount === window.ChatKit?.mount) {
+          instance = await CtorOrMount(chatEl, {
+            api: { 
+              async getClientSecret(current) { 
+                return await getClientSecret(current); 
+              } 
+            }
+          });
+        } else {
+          instance = new CtorOrMount(chatEl);
+          if (instance && typeof instance.setOptions === "function") {
+            await instance.setOptions({
+              api: { 
+                async getClientSecret(current) { 
+                  return await getClientSecret(current); 
+                } 
+              }
+            });
+          }
+        }
+        
+        chatEl.chatkit = instance || { mountedWithMountFn: true };
+        updateStatus("ChatKit widget loaded successfully!", "success");
+        console.log("mountChat: ChatKit mounted", chatEl.chatkit);
+      } catch (err) {
+        updateStatus(`Mount error: ${err.message}`, "error");
+        console.error("mountChat: failed to instantiate ChatKit:", err);
+        debugLog({ error: "Mount failed", message: err.message, stack: err.stack });
+      }
     }
-  }
-
-  // Initialize: load script and mount on DOMContentLoaded
-  document.addEventListener("DOMContentLoaded", () => {
-    loadAndMountChatKit();
-  });
-})();
-</script>
+    
+    // ===== SCRIPT LOADING =====
+    function loadScriptOnce(src, timeout = 10000) {
+      return new Promise((resolve, reject) => {
+        // Already available
+        if (window.ChatKit) {
+          updateStatus("ChatKit script already loaded", "success");
+          return resolve(window.ChatKit);
+        }
+        
+        // Check for existing script
+        const existing = Array.from(document.getElementsByTagName("script"))
+          .find(s => s.src === src);
+        
+        if (existing) {
+          existing.addEventListener("load", () => {
+            updateStatus("ChatKit script loaded (existing)", "success");
+            resolve(window.ChatKit);
+          });
+          existing.addEventListener("error", (e) => {
+            updateStatus("Script load error (existing)", "error");
+            reject(new Error("Script load error"));
+          });
+          return;
+        }
+        
+        // Create new script tag
+        updateStatus("Loading ChatKit script...", "loading");
+        const s = document.createElement("script");
+        s.src = src;
+        s.async = true;
+        
+        s.onload = () => {
+          updateStatus("ChatKit script loaded successfully", "success");
+          resolve(window.ChatKit);
+        };
+        
+        s.onerror = () => {
+          updateStatus("Failed to load ChatKit script", "error");
+          reject(new Error("Failed to load ChatKit script " + src));
+        };
+        
+        document.head.appendChild(s);
+        
+        setTimeout(() => {
+          if (!window.ChatKit) {
+            updateStatus("Script load timeout", "error");
+            reject(new Error("Timed out loading ChatKit script: " + src));
+          }
+        }, timeout);
+      });
+    }
+    
+    // ===== MAIN INITIALIZATION =====
+    async function loadAndMountChatKit() {
+      const CHATKIT_SRC = "https://cdn.platform.openai.com/deployments/chatkit/chatkit.js";
+      
+      try {
+        updateStatus("Initializing ChatKit...", "loading");
+        await loadScriptOnce(CHATKIT_SRC, 15000);
+        console.log("ChatKit script loaded, attempting mount");
+        await mountChat();
+      } catch (err) {
+        updateStatus(`Initialization failed: ${err.message}`, "error");
+        console.error("Error loading ChatKit:", err);
+        debugLog({ 
+          action: "script_load_failed", 
+          message: String(err),
+          stack: err.stack 
+        });
+      }
+    }
+    
+    // ===== RELOAD BUTTON =====
+    document.getElementById("reload-widget").addEventListener("click", async () => {
+      updateStatus("Reloading widget...", "loading");
+      const chatEl = document.getElementById("my-chat");
+      
+      if (chatEl && chatEl.chatkit) {
+        try {
+          if (typeof chatEl.chatkit.unmount === "function") {
+            chatEl.chatkit.unmount();
+          } else {
+            chatEl.innerHTML = "";
+          }
+        } catch (e) {
+          console.warn("reload: unmount failed:", e);
+          chatEl.innerHTML = "";
+        }
+        chatEl.chatkit = null;
+      } else if (chatEl) {
+        chatEl.innerHTML = "";
+      }
+      
+      cachedSecret = null;
+      cachedExpiresAt = 0;
+      
+      await new Promise(r => setTimeout(r, 300));
+      await loadAndMountChatKit();
+    });
+    
+    // ===== START ON DOM READY =====
+    if (document.readyState === 'loading') {
+      document.addEventListener("DOMContentLoaded", loadAndMountChatKit);
+    } else {
+      loadAndMountChatKit();
+    }
+  })();
+  </script>
+</body>
+</html>
