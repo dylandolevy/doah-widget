@@ -1,162 +1,123 @@
-<script>
-  const OPENAI_BASE = "https://api.openai.com/v1/chatkit";
-  let clientSecret = null;
-  let threadId = null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DoAH Assistant — debug restore</title>
+  <style>
+    /* simplified styles so the page definitely shows */
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);padding:20px}
+    .chat-container{width:100%;max-width:700px;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden;display:flex;flex-direction:column;height:640px}
+    .chat-header{padding:20px;background:linear-gradient(135deg,#667eea,#764ba2);color:white}
+    .messages{flex:1;padding:16px;overflow:auto;background:#f7f8fb}
+    .input-area{display:flex;gap:8px;padding:12px;background:#fff;border-top:1px solid #eee}
+    #message-input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
+    #send-btn{padding:10px 16px;border-radius:8px;border:none;background:#667eea;color:#fff;cursor:pointer}
+    .error-banner{display:none;padding:10px;background:#fdecea;color:#611; margin:12px}
+    .error-banner.show{display:block}
+    .message{margin-bottom:12px}
+    .assistant{color:#111}
+    .user{color:#444;text-align:right}
+  </style>
+</head>
+<body>
+  <div class="chat-container" id="app">
+    <div class="chat-header">
+      <strong>DoAH Assistant (debug)</strong>
+      <div style="font-size:12px;opacity:.9">This page renders even if API calls fail — check console & network.</div>
+    </div>
 
-  const messagesEl = document.getElementById('messages');
-  const inputEl = document.getElementById('message-input');
-  const sendBtn = document.getElementById('send-btn');
-  const typingEl = document.getElementById('typing');
-  const errorBanner = document.getElementById('error-banner');
+    <div id="error-banner" class="error-banner"></div>
 
-  function showError(message) {
-    errorBanner.textContent = message;
-    errorBanner.classList.add('show');
-    setTimeout(() => errorBanner.classList.remove('show'), 5000);
-  }
+    <div id="messages" class="messages">
+      <div class="message assistant">🤖 Hello! UI restored.</div>
+    </div>
 
-  function addMessage(text, role = 'user') {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
+    <div class="input-area">
+      <input id="message-input" placeholder="Type a message..." />
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
 
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  <script>
+    // defensive boot logs so you can see script loaded
+    console.log("[index.html] booting script");
 
-    messageDiv.innerHTML = `
-      <div class="message-avatar">${role === 'user' ? '👤' : '🤖'}</div>
-      <div>
-        <div class="message-bubble">${text}</div>
-        <div class="message-time">${time}</div>
-      </div>
-    `;
+    // DOM refs
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const errorBanner = document.getElementById('error-banner');
 
-    messagesEl.insertBefore(messageDiv, typingEl);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
+    function showError(msg) {
+      console.error("[app error]", msg);
+      errorBanner.textContent = msg;
+      errorBanner.classList.add('show');
+      setTimeout(()=> errorBanner.classList.remove('show'), 5000);
+    }
 
-  async function ensureSession() {
-    if (clientSecret) return;
+    function appendMessage(text, cls = 'assistant') {
+      const d = document.createElement('div');
+      d.className = 'message ' + cls;
+      d.textContent = (cls === 'user' ? '👤 ' : '🤖 ') + text;
+      messagesEl.appendChild(d);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
-    const res = await fetch(`/api/chatkit/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: "guest-" + Date.now() })
+    // Minimal safe send — DOES NOT break page if fetch fails.
+    async function sendMessage() {
+      const text = inputEl.value && inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = '';
+      appendMessage(text, 'user');
+
+      // Show temporary typing placeholder
+      appendMessage('…waiting for response (demo)', 'assistant');
+
+      try {
+        // This demo does nothing heavy. If you want full ChatKit flow, uncomment below and
+        // adapt per whether you're running Next.js or static site.
+        // Example safe call to your session endpoint:
+        /*
+        const resp = await fetch('/api/chatkit/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: 'guest-' + Date.now() })
+        });
+        const payload = await resp.json();
+        if (!resp.ok) throw new Error(payload.hint || payload.problem || 'session failed');
+        console.log('session payload', payload);
+        appendMessage('Session created (see console).', 'assistant');
+        */
+
+        // Demo reply:
+        setTimeout(()=>{
+          // replace last assistant placeholder
+          const list = messagesEl.querySelectorAll('.message.assistant');
+          const last = list[list.length - 1];
+          if (last) last.textContent = '🤖 Demo reply — your message was received.';
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }, 800);
+
+      } catch (err) {
+        // Replace last assistant placeholder with error
+        const list = messagesEl.querySelectorAll('.message.assistant');
+        const last = list[list.length - 1];
+        if (last) last.textContent = '🤖 Error fetching response — see console.';
+        showError(err.message || String(err));
+      }
+    }
+
+    // Events
+    sendBtn.addEventListener('click', sendMessage);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
     });
 
-    const data = await res.json();
+    // sanity check: script loaded
+    console.log("[index.html] script loaded, UI should be visible");
 
-    if (!res.ok) {
-      throw new Error(data.hint || data.problem || "Session creation failed");
-    }
-
-    clientSecret = data.client_secret;
-  }
-
-  async function sendMessage() {
-    const message = inputEl.value.trim();
-    if (!message) return;
-
-    inputEl.value = '';
-    inputEl.disabled = true;
-    sendBtn.disabled = true;
-
-    addMessage(message, 'user');
-    typingEl.classList.add('active');
-
-    try {
-      await ensureSession();
-
-      let url;
-      let body;
-
-      if (!threadId) {
-        // Create thread
-        url = `${OPENAI_BASE}/threads`;
-
-        body = {
-          initial_items: [
-            {
-              type: "user_message",
-              content: [
-                { type: "input_text", text: message }
-              ]
-            }
-          ]
-        };
-      } else {
-        // Add item to existing thread
-        url = `${OPENAI_BASE}/threads/${threadId}/items`;
-
-        body = {
-          type: "user_message",
-          content: [
-            { type: "input_text", text: message }
-          ]
-        };
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "OpenAI-Beta": "chatkit_beta=v1",
-          "ChatKit-Client-Secret": clientSecret
-        },
-        body: JSON.stringify(body)
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.error("OpenAI error:", data);
-        throw new Error(data.error?.message || "OpenAI error");
-      }
-
-      if (!threadId) {
-        threadId = data.id;
-      }
-
-      // Now fetch latest thread state to get assistant response
-      const threadRes = await fetch(`${OPENAI_BASE}/threads/${threadId}`, {
-        headers: {
-          "OpenAI-Beta": "chatkit_beta=v1",
-          "ChatKit-Client-Secret": clientSecret
-        }
-      });
-
-      const threadData = await threadRes.json();
-
-      const items = threadData.items || [];
-      const lastAssistant = [...items].reverse().find(i => i.type === "assistant_message");
-
-      let assistantText = "No response";
-      if (lastAssistant?.content?.[0]?.text) {
-        assistantText = lastAssistant.content[0].text;
-      }
-
-      addMessage(assistantText, 'assistant');
-
-    } catch (err) {
-      console.error(err);
-      showError(err.message);
-      addMessage("Something went wrong.", "assistant");
-    } finally {
-      typingEl.classList.remove('active');
-      inputEl.disabled = false;
-      sendBtn.disabled = false;
-      inputEl.focus();
-    }
-  }
-
-  sendBtn.addEventListener("click", sendMessage);
-
-  inputEl.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  window.addEventListener("load", () => {
-    ensureSession().catch(err => showError(err.message));
-  });
-</script>
+  </script>
+</body>
+</html>
