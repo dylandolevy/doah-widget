@@ -2,120 +2,86 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || null;
 
 export default async function handler(req, res) {
-  try {
-    // CORS
-    const origin = req.headers.origin;
-    if (req.method === "OPTIONS") {
-      res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-      res.setHeader("Access-Control-Allow-Origin", origin || "*");
-      return res.status(204).end();
-    }
-    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+  // CORS — always respond to preflight and set allow-origin
+  const origin = req.headers.origin || "*";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, ChatKit-Client-Secret");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
 
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  try {
     if (!OPENAI_API_KEY) {
       return res.status(500).json({
         ok: false,
         problem: "OPENAI_API_KEY_MISSING",
-        hint: "OPENAI_API_KEY is not present in environment variables"
+        hint: "Set OPENAI_API_KEY in Vercel environment variables"
       });
     }
 
-    // Accept session_id or thread_id from client for flexibility
-    const { client_secret, message } = req.body || {};
-    let session_id = req.body && (req.body.session_id || req.body.sessionId || null);
-    let thread_id = req.body && (req.body.thread_id || req.body.threadId || null);
-
-    console.log('Incoming /api/chatkit/message keys:', Object.keys(req.body || {}));
-    console.log('Has client_secret:', !!client_secret, 'session_id present:', !!session_id, 'thread_id present:', !!thread_id);
+    const body = req.body || {};
+    const client_secret = body.client_secret || req.headers["chatkit-client-secret"] || null;
+    const message = body.message;
+    const thread_id = body.thread_id || body.threadId || null;
 
     if (!client_secret) {
-      return res.status(400).json({
-        ok: false,
-        problem: "MISSING_CLIENT_SECRET",
-        hint: "client_secret is required"
-      });
+      return res.status(400).json({ ok: false, problem: "MISSING_CLIENT_SECRET", hint: "client_secret required" });
     }
-
     if (!message) {
-      return res.status(400).json({
-        ok: false,
-        problem: "MISSING_MESSAGE",
-        hint: "message is required"
-      });
+      return res.status(400).json({ ok: false, problem: "MISSING_MESSAGE", hint: "message required" });
     }
 
-    // We'll attempt to append to an existing thread (if provided),
-    // otherwise create a new thread on behalf of the session.
-    // ChatKit primarily exposes threads/items, not sessions/{id}/messages. See docs.
-    // If you want the frontend to talk directly to OpenAI, hand it the client_secret instead.
     const base = "https://api.openai.com/v1/chatkit";
-    let apiUrl;
-    let body;
+    let apiUrl, payload;
 
     if (thread_id) {
-      // append to an existing thread
-      apiUrl = `${base}/threads/${thread_id}/items`;
-      // thread items generally expect a structure; we'll use a plain user_message item shape
-      body = {
-        // include session_id if available so OpenAI can check session scope
-        session_id: session_id || undefined,
-        // item payload: type and content. If the schema is different, OpenAI will return an informative error.
+      apiUrl = `${base}/threads/${encodeURIComponent(thread_id)}/items`;
+      payload = {
         type: "user_message",
-        content: [
-          { type: "input_text", text: message }
-        ]
+        content: [{ type: "input_text", text: message }]
       };
     } else {
-      // create a new thread (initial user message)
       apiUrl = `${base}/threads`;
-      body = {
-        session_id: session_id || undefined,
-        // minimal thread creation payload — server will tell us if fields differ
+      payload = {
         initial_items: [
-          {
-            type: "user_message",
-            content: [
-              { type: "input_text", text: message }
-            ]
-          }
+          { type: "user_message", content: [{ type: "input_text", text: message }] }
         ]
       };
     }
 
-    // Send to OpenAI ChatKit endpoints
+    // Call OpenAI ChatKit API
     const resp = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "OpenAI-Beta": "chatkit_beta=v1",
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "OpenAI-Beta": "chatkit_beta=v1",
         "ChatKit-Client-Secret": client_secret
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(payload)
     });
 
-    // Parse JSON robustly
     const data = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      // Return the OpenAI error to the client for debugging (useful during dev)
-      console.error("OpenAI ChatKit error:", {
-        status: resp.status,
-        attempted_url: apiUrl,
-        body: data
-      });
+      // forward OpenAI error body (helpful during dev)
+      console.error("OpenAI ChatKit error:", { status: resp.status, url: apiUrl, data });
       return res.status(resp.status).json({
         ok: false,
         problem: "OPENAI_ERROR",
-        details: data,
-        attempted_url: apiUrl
+        attempted_url: apiUrl,
+        details: data
       });
     }
 
-    // success — forward the OpenAI response
-    console.log('ChatKit request success:', { attempted_url: apiUrl });
-    return res.status(200).json(data);
+    // Success: return OpenAI response to client
+    // Also, for convenience, include top-level fields thread_id (if available)
+    const returnedThreadId = data.id || data.thread_id || data.threadId || thread_id || null;
+    const result = Object.assign({}, data, { thread_id: returnedThreadId });
+
+    return res.status(200).json(result);
 
   } catch (err) {
     console.error("Handler exception:", err && err.stack ? err.stack : err);
