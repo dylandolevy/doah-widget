@@ -1,54 +1,74 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>DoAH — ChatKit Embed</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>body{margin:0;font-family:system-ui}#chat-root{height:100vh}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My AI Agent</title>
+    
+    <script
+      src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"
+      async
+    ></script>
+    
+    <style>
+        /* Optional: Style the container */
+        body { font-family: sans-serif; }
+        #chat-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            height: 600px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+        }
+    </style>
 </head>
 <body>
-  <div id="chat-root"></div>
 
-  <!-- Load ChatKit web component from OpenAI's hosted package (CDN). -->
-  <!-- If your policy or network blocks jsDelivr, use the recommended script url from docs. -->
-  <script src="https://cdn.jsdelivr.net/npm/@openai/chatkit@latest/dist/chatkit.min.js"></script>
+    <h1>Welcome to my Agent Website</h1>
+    
+    <div id="my-chat-widget"></div>
 
-  <script>
-    // Gets called by ChatKit to obtain client_secret for the widget.
-    async function getClientSecret(currentClientSecret) {
-      // If we already have an unexpired secret, return it
-      if (currentClientSecret) return currentClientSecret;
+    <script>
+        // 3. Initialize ChatKit once the script loads
+        // We use a simple polling check to wait for the library to be ready
+        const initChat = setInterval(() => {
+            if (window.chatkit) {
+                clearInterval(initChat);
+                setupChatKit();
+            }
+        }, 100);
 
-      // Else fetch one from our server
-      const res = await fetch('/api/chatkit/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: 'guest-' + Date.now() })
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        console.error('Failed to get client_secret', body);
-        throw new Error(body.hint || body.problem || 'Session creation failed');
-      }
-      return body.client_secret;
-    }
+        function setupChatKit() {
+            const widget = window.chatkit.create({
+                // Ensure this ID matches your div above
+                element: document.getElementById('my-chat-widget'),
+            });
 
-    (async () => {
-      // Create the ChatKit element and mount into the DOM
-      const chatkit = document.createElement('openai-chatkit');
+            widget.setOptions({
+                api: {
+                    // This function fetches the token from YOUR Vercel backend
+                    async getClientSecret(existingSecret) {
+                        // If we already have a secret and just need to refresh, you might handle that here
+                        // For simplicity, we just fetch a new one
+                        const res = await fetch('/api/session', { 
+                            method: 'POST' 
+                        });
+                        
+                        if (!res.ok) {
+                            console.error("Failed to fetch session token");
+                            return null;
+                        }
 
-      // The widget uses the getClientSecret method internally
-      chatkit.setOptions({
-        api: {
-          async getClientSecret(currentClientSecret) {
-            return await getClientSecret(currentClientSecret);
-          }
-        },
-        // Optional UI/customization options here (title, placeholder, theme...)
-      });
-
-      document.getElementById('chat-root').appendChild(chatkit);
-    })();
-  </script>
+                        const data = await res.json();
+                        return data.client_secret;
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>
