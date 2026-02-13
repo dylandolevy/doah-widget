@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DoAH Widget</title>
+  <title>DoAH Workflow</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -144,9 +144,6 @@
     </div>
   </div>
 
-  <!-- Load ChatKit CDN Script -->
-  <script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js"></script>
-
   <script>
   (function() {
     'use strict';
@@ -198,59 +195,56 @@
     }
     
     // ==================== API FUNCTIONS ====================
-    async function createSession(userId = null) {
+    async function getClientSecret(currentClientSecret) {
       try {
-        updateStatus('Creating new session...', 'loading');
-        
-        const response = await fetch(`${CONFIG.VERCEL_API}/api/chatkit/session`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            user: userId || `guest-${Date.now()}` 
-          })
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData?.error?.message || `HTTP ${response.status}`);
+        // If no current secret, create new session
+        if (!currentClientSecret) {
+          updateStatus('Creating new session...', 'loading');
+          console.log('Creating new session...');
+          
+          const response = await fetch(`${CONFIG.VERCEL_API}/api/chatkit/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user: `guest-${Date.now()}` })
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData?.error?.message || `HTTP ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (!data.client_secret) {
+            throw new Error('No client_secret in response');
+          }
+          
+          state.clientSecret = data.client_secret;
+          state.expiresAt = data.expires_at || 0;
+          
+          updateDebug({
+            action: 'create_session',
+            client_secret: data.client_secret.substring(0, 20) + '...',
+            expires_at: data.expires_at
+          });
+          
+          updateStatus('✅ ChatKit connected!', 'success');
+          setTimeout(() => {
+            document.getElementById('status').style.display = 'none';
+          }, 2000);
+          
+          console.log('✓ Session created successfully');
+          return data.client_secret;
         }
         
-        const data = await response.json();
-        
-        if (!data.client_secret) {
-          throw new Error('No client_secret in response');
-        }
-        
-        state.clientSecret = data.client_secret;
-        state.expiresAt = data.expires_at || 0;
-        
-        updateDebug({
-          action: 'create_session',
-          client_secret: data.client_secret.substring(0, 20) + '...',
-          expires_at: data.expires_at,
-          expires_in_seconds: state.expiresAt - Math.floor(Date.now() / 1000)
-        });
-        
-        console.log('✓ Session created successfully');
-        return state.clientSecret;
-        
-      } catch (error) {
-        updateStatus(`Session error: ${error.message}`, 'error');
-        updateDebug({ error: error.message, stack: error.stack });
-        throw error;
-      }
-    }
-    
-    async function refreshSession(currentSecret) {
-      try {
+        // Refresh existing session
         updateStatus('Refreshing session...', 'loading');
+        console.log('Refreshing session...');
         
         const response = await fetch(`${CONFIG.VERCEL_API}/api/chatkit/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            client_secret: currentSecret 
-          })
+          body: JSON.stringify({ client_secret: currentClientSecret })
         });
         
         if (!response.ok) {
@@ -265,139 +259,93 @@
         
         updateDebug({ action: 'refresh_session', ...data });
         console.log('✓ Session refreshed');
-        return state.clientSecret;
+        
+        return data.client_secret;
         
       } catch (error) {
-        updateStatus(`Refresh error: ${error.message}`, 'error');
+        updateStatus(`API Error: ${error.message}`, 'error');
         updateDebug({ error: error.message, stack: error.stack });
+        console.error('getClientSecret error:', error);
         throw error;
       }
     }
     
-    // ==================== CHATKIT CONFIGURATION ====================
-    async function configureChatKit() {
+    // ==================== CHATKIT INITIALIZATION ====================
+    async function initializeChatKitWidget() {
       try {
-        updateStatus('Waiting for ChatKit element...', 'loading');
+        updateStatus('Loading ChatKit script...', 'loading');
         
-        // Wait for the ChatKit element to be ready
-        const chatkit = await waitForChatKitElement();
-        
-        updateStatus('Configuring ChatKit...', 'loading');
-        
-        // Configure ChatKit using setOptions (OpenAI's recommended approach)
-        await chatkit.setOptions({
-          api: {
-            async getClientSecret(currentClientSecret) {
-              try {
-                // If no current secret, create new session
-                if (!currentClientSecret) {
-                  console.log('No existing secret, creating new session...');
-                  const secret = await createSession();
-                  updateStatus('✅ ChatKit connected!', 'success');
-                  
-                  // Hide status bar after 2 seconds
-                  setTimeout(() => {
-                    const statusEl = document.getElementById('status');
-                    statusEl.style.display = 'none';
-                  }, 2000);
-                  
-                  return secret;
-                }
-                
-                // Refresh existing session
-                console.log('Refreshing existing session...');
-                const secret = await refreshSession(currentClientSecret);
-                return secret;
-                
-              } catch (error) {
-                console.error('getClientSecret error:', error);
-                updateStatus(`API Error: ${error.message}`, 'error');
-                throw error;
+        // Dynamically load ChatKit script with the API configuration embedded
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.textContent = `
+          import ChatKit from 'https://cdn.platform.openai.com/deployments/chatkit/chatkit.js';
+          
+          const container = document.getElementById('my-chat');
+          
+          const chatkit = new ChatKit(container, {
+            api: {
+              async getClientSecret(currentSecret) {
+                // Call the global function
+                return await window.__getChatKitSecret(currentSecret);
               }
             }
-          }
-        });
+          });
+          
+          window.__chatKitInstance = chatkit;
+          console.log('ChatKit initialized via ES module');
+        `;
         
-        state.retryCount = 0;
+        // Expose the getClientSecret function globally
+        window.__getChatKitSecret = getClientSecret;
         
-        updateDebug({ 
-          status: 'configured',
-          method: 'setOptions',
-          timestamp: new Date().toISOString()
-        });
+        updateStatus('Mounting ChatKit...', 'loading');
         
-        console.log('✅ ChatKit configured successfully');
+        script.onerror = (err) => {
+          console.error('Script load error:', err);
+          updateStatus('❌ Failed to load ChatKit script', 'error');
+          updateDebug({ error: 'Script load failed', details: String(err) });
+        };
+        
+        document.body.appendChild(script);
+        
+        // Wait a bit for initialization
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        if (window.__chatKitInstance) {
+          console.log('✅ ChatKit initialized successfully');
+          updateDebug({ status: 'initialized', method: 'ES module import' });
+        } else {
+          throw new Error('ChatKit instance not created');
+        }
         
       } catch (error) {
-        updateStatus(`Configuration error: ${error.message}`, 'error');
-        updateDebug({ 
-          error: error.message, 
-          stack: error.stack,
-          retryCount: state.retryCount
-        });
+        updateStatus(`Initialization error: ${error.message}`, 'error');
+        updateDebug({ error: error.message, stack: error.stack });
+        console.error('ChatKit initialization error:', error);
         
         // Retry logic
         if (state.retryCount < CONFIG.MAX_RETRIES) {
           state.retryCount++;
           updateStatus(`Retrying in ${CONFIG.RETRY_DELAY/1000}s... (${state.retryCount}/${CONFIG.MAX_RETRIES})`, 'loading');
-          setTimeout(configureChatKit, CONFIG.RETRY_DELAY);
+          setTimeout(initializeChatKitWidget, CONFIG.RETRY_DELAY);
         } else {
-          updateStatus('❌ Failed to configure ChatKit after multiple attempts', 'error');
+          updateStatus('❌ Failed to initialize ChatKit after multiple attempts', 'error');
         }
-        
-        throw error;
       }
-    }
-    
-    async function waitForChatKitElement(maxWait = 15000) {
-      const startTime = Date.now();
-      
-      while (Date.now() - startTime < maxWait) {
-        const element = document.getElementById('my-chat');
-        
-        // Check if element exists and has setOptions method
-        if (element && typeof element.setOptions === 'function') {
-          console.log('✓ ChatKit element ready with setOptions');
-          updateDebug({
-            found: 'ChatKit element',
-            hasSetOptions: true,
-            elementId: 'my-chat'
-          });
-          return element;
-        }
-        
-        // Wait before checking again
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      
-      // Timeout - provide helpful debug info
-      const element = document.getElementById('my-chat');
-      updateDebug({
-        error: 'ChatKit element not ready',
-        elementExists: !!element,
-        hasSetOptions: element ? typeof element.setOptions === 'function' : false,
-        waited: maxWait + 'ms'
-      });
-      
-      throw new Error('ChatKit element not ready (setOptions not found). Make sure the ChatKit script loaded correctly.');
     }
     
     // ==================== PUBLIC FUNCTIONS ====================
     window.initializeChatKit = async function() {
       try {
-        // Show status bar
         document.getElementById('status').style.display = 'block';
         
-        // Check HTTPS
         if (!checkHTTPS()) {
           return;
         }
         
-        // Reset state
         state.retryCount = 0;
-        
-        // Configure ChatKit
-        await configureChatKit();
+        await initializeChatKitWidget();
         
       } catch (error) {
         console.error('Initialization error:', error);
@@ -407,30 +355,30 @@
     window.reloadWidget = async function() {
       updateStatus('Reloading...', 'loading');
       
+      // Clear container
+      const container = document.getElementById('my-chat');
+      if (container) {
+        container.innerHTML = '';
+      }
+      
       // Reset state
       state.clientSecret = null;
       state.expiresAt = 0;
       state.retryCount = 0;
+      window.__chatKitInstance = null;
       
-      // Wait a moment then reinitialize
       await new Promise(resolve => setTimeout(resolve, 500));
       await window.initializeChatKit();
     };
     
     // ==================== AUTO-INITIALIZATION ====================
-    function autoInit() {
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-          // Wait 1 second for ChatKit script to load
-          setTimeout(window.initializeChatKit, 1000);
-        });
-      } else {
-        // DOM already loaded, wait 1 second
-        setTimeout(window.initializeChatKit, 1000);
-      }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(window.initializeChatKit, 500);
+      });
+    } else {
+      setTimeout(window.initializeChatKit, 500);
     }
-    
-    autoInit();
     
   })();
   </script>
