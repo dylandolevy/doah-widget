@@ -3,384 +3,249 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DoAH Workflow</title>
+  <title>ChatKit Workflow Widget</title>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      max-width: 1000px;
-      margin: 0 auto;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 20px;
-      background: #f5f5f5;
     }
+    
     .container {
       background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      width: 100%;
+      max-width: 450px;
     }
-    h1 {
-      color: #333;
-      margin-top: 0;
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 24px;
+      text-align: center;
     }
-    .status-bar {
-      padding: 15px;
-      margin: 15px 0;
-      border-radius: 6px;
+    
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .status {
+      padding: 12px 24px;
       font-size: 14px;
       font-weight: 500;
+      text-align: center;
     }
-    .status-bar.loading {
+    
+    .status.loading {
       background: #fff3cd;
-      border: 1px solid #ffc107;
       color: #856404;
     }
-    .status-bar.success {
+    
+    .status.success {
       background: #d4edda;
-      border: 1px solid #28a745;
       color: #155724;
     }
-    .status-bar.error {
+    
+    .status.error {
       background: #f8d7da;
-      border: 1px solid #dc3545;
       color: #721c24;
     }
-    .alert {
-      padding: 12px;
-      margin: 15px 0;
-      border-radius: 4px;
+    
+    .status.info {
       background: #d1ecf1;
-      border: 1px solid #17a2b8;
       color: #0c5460;
     }
-    .alert strong {
-      display: block;
-      margin-bottom: 5px;
-    }
+    
     #my-chat {
-      margin-top: 20px;
       width: 100%;
       height: 600px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
       background: #fafafa;
     }
-    #debug-panel {
-      margin-top: 20px;
-      padding: 15px;
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-    }
-    #debug-panel h3 {
-      margin-top: 0;
-      font-size: 16px;
-      color: #495057;
-    }
-    pre {
-      background: white;
-      padding: 10px;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 12px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
+    
     button {
+      margin: 12px 24px;
       padding: 10px 20px;
-      background: #007bff;
+      background: #667eea;
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
-      margin: 5px 5px 5px 0;
       font-size: 14px;
+      font-weight: 600;
     }
+    
     button:hover {
-      background: #0056b3;
+      background: #5568d3;
     }
-    button.secondary {
-      background: #6c757d;
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
     }
-    button.secondary:hover {
-      background: #545b62;
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🤖 ChatKit Widget Integration</h1>
-    
-    <!-- HTTPS Warning -->
-    <div id="https-warning" class="alert" style="display: none;">
-      <strong>⚠️ HTTPS Required</strong>
-      ChatKit requires HTTPS. Please deploy this page to:
-      <ul>
-        <li>GitHub Pages (with HTTPS enabled)</li>
-        <li>Vercel/Netlify deployment</li>
-        <li>Any HTTPS-enabled hosting</li>
-      </ul>
-      <small>Testing on file:// or http://localhost will not work.</small>
+    <div class="header">
+      <h1>🤖 DoAH Assistant</h1>
+      <p>Powered by OpenAI Workflow</p>
     </div>
     
-    <!-- Status Bar -->
-    <div id="status" class="status-bar loading">
-      Initializing...
+    <div id="status" class="status loading">
+      <span class="loading-spinner"></span>
+      Initializing ChatKit...
     </div>
     
-    <!-- Action Buttons -->
-    <div>
-      <button onclick="initializeChatKit()">Initialize ChatKit</button>
-      <button onclick="reloadWidget()" class="secondary">Reload Widget</button>
-      <button onclick="toggleDebug()" class="secondary">Toggle Debug</button>
-    </div>
+    <button id="reload-btn" style="display: none;" onclick="window.location.reload()">
+      Reload Widget
+    </button>
     
-    <!-- Chat Widget Container - IMPORTANT: ID must be "my-chat" for ChatKit -->
+    <!-- ChatKit will mount here -->
     <div id="my-chat"></div>
-    
-    <!-- Debug Panel -->
-    <div id="debug-panel" style="display: none;">
-      <h3>Debug Information</h3>
-      <pre id="debug-output">No debug data yet...</pre>
-    </div>
   </div>
 
   <script>
-  (function() {
-    'use strict';
+    const VERCEL_API = 'https://doah-widget.vercel.app';
     
-    // ==================== CONFIGURATION ====================
-    const CONFIG = {
-      VERCEL_API: 'https://doah-widget.vercel.app',
-      MAX_RETRIES: 3,
-      RETRY_DELAY: 2000,
-    };
-    
-    // ==================== STATE ====================
-    let state = {
-      clientSecret: null,
-      expiresAt: 0,
-      retryCount: 0,
-    };
-    
-    // ==================== UTILITY FUNCTIONS ====================
     function updateStatus(message, type = 'loading') {
-      const statusEl = document.getElementById('status');
-      statusEl.textContent = message;
-      statusEl.className = `status-bar ${type}`;
+      const el = document.getElementById('status');
+      const spinner = type === 'loading' ? '<span class="loading-spinner"></span>' : '';
+      el.innerHTML = spinner + message;
+      el.className = `status ${type}`;
       console.log(`[${type.toUpperCase()}] ${message}`);
     }
     
-    function updateDebug(data) {
-      const debugEl = document.getElementById('debug-output');
-      debugEl.textContent = JSON.stringify(data, null, 2);
-    }
-    
-    window.toggleDebug = function() {
-      const panel = document.getElementById('debug-panel');
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    };
-    
-    function checkHTTPS() {
-      const isHTTPS = window.location.protocol === 'https:';
-      const warningEl = document.getElementById('https-warning');
-      
-      if (!isHTTPS) {
-        warningEl.style.display = 'block';
-        updateStatus('⚠️ HTTPS required - ChatKit will not work on HTTP', 'error');
-        return false;
-      }
-      
-      warningEl.style.display = 'none';
-      return true;
-    }
-    
-    // ==================== API FUNCTIONS ====================
-    async function getClientSecret(currentClientSecret) {
-      try {
-        // If no current secret, create new session
-        if (!currentClientSecret) {
-          updateStatus('Creating new session...', 'loading');
-          console.log('Creating new session...');
+    // Global API configuration for ChatKit
+    window.chatkitAPI = {
+      async getClientSecret(currentClientSecret) {
+        try {
+          if (!currentClientSecret) {
+            updateStatus('Creating session...', 'loading');
+            console.log('Creating new session...');
+            
+            const res = await fetch(`${VERCEL_API}/api/chatkit/session`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user: 'guest-' + Date.now() })
+            });
+            
+            if (!res.ok) {
+              const errorData = await res.json();
+              throw new Error(errorData.problem || errorData.hint || `HTTP ${res.status}`);
+            }
+            
+            const data = await res.json();
+            console.log('Session response:', data);
+            
+            if (!data.client_secret) {
+              throw new Error('No client_secret in response');
+            }
+            
+            updateStatus('✅ Connected!', 'success');
+            setTimeout(() => {
+              const statusEl = document.getElementById('status');
+              statusEl.style.display = 'none';
+            }, 2000);
+            
+            return data.client_secret;
+          }
           
-          const response = await fetch(`${CONFIG.VERCEL_API}/api/chatkit/session`, {
+          // Refresh session
+          console.log('Refreshing session...');
+          updateStatus('Refreshing...', 'loading');
+          
+          const res = await fetch(`${VERCEL_API}/api/chatkit/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user: `guest-${Date.now()}` })
+            body: JSON.stringify({ client_secret: currentClientSecret })
           });
           
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData?.error?.message || `HTTP ${response.status}`);
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.problem || errorData.hint || `HTTP ${res.status}`);
           }
           
-          const data = await response.json();
-          
-          if (!data.client_secret) {
-            throw new Error('No client_secret in response');
-          }
-          
-          state.clientSecret = data.client_secret;
-          state.expiresAt = data.expires_at || 0;
-          
-          updateDebug({
-            action: 'create_session',
-            client_secret: data.client_secret.substring(0, 20) + '...',
-            expires_at: data.expires_at
-          });
-          
-          updateStatus('✅ ChatKit connected!', 'success');
-          setTimeout(() => {
-            document.getElementById('status').style.display = 'none';
-          }, 2000);
-          
-          console.log('✓ Session created successfully');
+          const data = await res.json();
+          console.log('Session refreshed');
           return data.client_secret;
-        }
-        
-        // Refresh existing session
-        updateStatus('Refreshing session...', 'loading');
-        console.log('Refreshing session...');
-        
-        const response = await fetch(`${CONFIG.VERCEL_API}/api/chatkit/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ client_secret: currentClientSecret })
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData?.error?.message || `HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        state.clientSecret = data.client_secret;
-        state.expiresAt = data.expires_at || 0;
-        
-        updateDebug({ action: 'refresh_session', ...data });
-        console.log('✓ Session refreshed');
-        
-        return data.client_secret;
-        
-      } catch (error) {
-        updateStatus(`API Error: ${error.message}`, 'error');
-        updateDebug({ error: error.message, stack: error.stack });
-        console.error('getClientSecret error:', error);
-        throw error;
-      }
-    }
-    
-    // ==================== CHATKIT INITIALIZATION ====================
-    async function initializeChatKitWidget() {
-      try {
-        updateStatus('Loading ChatKit script...', 'loading');
-        
-        // Dynamically load ChatKit script with the API configuration embedded
-        const script = document.createElement('script');
-        script.type = 'module';
-        script.textContent = `
-          import ChatKit from 'https://cdn.platform.openai.com/deployments/chatkit/chatkit.js';
           
-          const container = document.getElementById('my-chat');
-          
-          const chatkit = new ChatKit(container, {
-            api: {
-              async getClientSecret(currentSecret) {
-                // Call the global function
-                return await window.__getChatKitSecret(currentSecret);
-              }
-            }
-          });
-          
-          window.__chatKitInstance = chatkit;
-          console.log('ChatKit initialized via ES module');
-        `;
-        
-        // Expose the getClientSecret function globally
-        window.__getChatKitSecret = getClientSecret;
-        
-        updateStatus('Mounting ChatKit...', 'loading');
-        
-        script.onerror = (err) => {
-          console.error('Script load error:', err);
-          updateStatus('❌ Failed to load ChatKit script', 'error');
-          updateDebug({ error: 'Script load failed', details: String(err) });
-        };
-        
-        document.body.appendChild(script);
-        
-        // Wait a bit for initialization
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        if (window.__chatKitInstance) {
-          console.log('✅ ChatKit initialized successfully');
-          updateDebug({ status: 'initialized', method: 'ES module import' });
-        } else {
-          throw new Error('ChatKit instance not created');
+        } catch (error) {
+          updateStatus(`❌ Error: ${error.message}`, 'error');
+          document.getElementById('reload-btn').style.display = 'block';
+          console.error('API error:', error);
+          throw error;
         }
-        
-      } catch (error) {
-        updateStatus(`Initialization error: ${error.message}`, 'error');
-        updateDebug({ error: error.message, stack: error.stack });
-        console.error('ChatKit initialization error:', error);
-        
-        // Retry logic
-        if (state.retryCount < CONFIG.MAX_RETRIES) {
-          state.retryCount++;
-          updateStatus(`Retrying in ${CONFIG.RETRY_DELAY/1000}s... (${state.retryCount}/${CONFIG.MAX_RETRIES})`, 'loading');
-          setTimeout(initializeChatKitWidget, CONFIG.RETRY_DELAY);
-        } else {
-          updateStatus('❌ Failed to initialize ChatKit after multiple attempts', 'error');
-        }
-      }
-    }
-    
-    // ==================== PUBLIC FUNCTIONS ====================
-    window.initializeChatKit = async function() {
-      try {
-        document.getElementById('status').style.display = 'block';
-        
-        if (!checkHTTPS()) {
-          return;
-        }
-        
-        state.retryCount = 0;
-        await initializeChatKitWidget();
-        
-      } catch (error) {
-        console.error('Initialization error:', error);
       }
     };
     
-    window.reloadWidget = async function() {
-      updateStatus('Reloading...', 'loading');
+    // Initialize ChatKit when script loads
+    function initChatKit() {
+      updateStatus('Configuring ChatKit...', 'loading');
       
-      // Clear container
       const container = document.getElementById('my-chat');
-      if (container) {
-        container.innerHTML = '';
+      
+      // Check if ChatKit loaded and added methods to the container
+      if (container && typeof container.setOptions === 'function') {
+        console.log('Using setOptions method');
+        container.setOptions({
+          api: window.chatkitAPI
+        });
+      } else {
+        console.log('Waiting for ChatKit to inject into container...');
+        // ChatKit might inject itself automatically
+        // Just wait and see if it works
+        setTimeout(() => {
+          if (container && typeof container.setOptions === 'function') {
+            container.setOptions({ api: window.chatkitAPI });
+          } else {
+            updateStatus('⚠️ ChatKit loading... Please wait', 'info');
+          }
+        }, 2000);
       }
-      
-      // Reset state
-      state.clientSecret = null;
-      state.expiresAt = 0;
-      state.retryCount = 0;
-      window.__chatKitInstance = null;
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await window.initializeChatKit();
-    };
+    }
     
-    // ==================== AUTO-INITIALIZATION ====================
+    // Wait for DOM and script
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(window.initializeChatKit, 500);
+        setTimeout(initChatKit, 1000);
       });
     } else {
-      setTimeout(window.initializeChatKit, 500);
+      setTimeout(initChatKit, 1000);
     }
-    
-  })();
   </script>
+  
+  <!-- Load ChatKit CDN -->
+  <script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" async></script>
 </body>
 </html>
